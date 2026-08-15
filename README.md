@@ -1,0 +1,89 @@
+# Open Tower Defense
+
+An open-source **maze tower defense** game. You are not painting turrets along a fixed track. You are a commander with scrap, guns, and a grid: wall the field into a kill corridor, cover the air, and keep the frontier relay alive for as many waves as you can.
+
+**Shape the kill zone. Hold the relay.**
+
+MIT licensed. Built to be played, forked, and extended.
+
+## Play (1.0)
+
+Endless matches on eight theaters, an **eight-mission** campaign, known-seed challenges, and **catalog packs**. Barricades and towers **block ground pathing**. Air ignores the maze and steers at the nearest relay. Ten buildables, four upgrade tiers, targeting modes, three strikes, settings (mute, palettes, UI scale, **key rebind**), pan/zoom, a **minimap**, a **map probe**, a **loadout probe**, replay verify hashes, **local co-op** (`/play?coop=1`), a **wave director** with intel, **interest** on leftover scrap, **paint-drag** placement, **relay repair**, **structure move**, **overcharge**, a **Walk** overlay, and a **replay desk** (`/replay`).
+
+### Controls
+
+| Input | Action |
+| --- | --- |
+| `1`–`9` | Barricade through Swarm Rack (rebindable) |
+| `0` | Siege Rail |
+| `Q` `W` `E` | Satchel / Overload / Orbital |
+| `T` | Cycle targeting (first / last / strong / weak / flying / camo) |
+| `C` | Convert Helios to air (1 scrap, no undo except sell) |
+| `V` | Repair the relay (35 scrap, +1 integrity) |
+| `G` | Move the selected structure (6 scrap) |
+| `B` | Overcharge the selected turret (40 scrap) |
+| `Esc` / right-click | Cancel, then pause |
+| `U` / `X` | Upgrade / sell |
+| `N` | Call next wave |
+| `Space` / `F` | Pause / speed |
+| `M` | Mute |
+| `Home` | Reset view |
+| Drag / pinch / wheel | Paint while a structure is selected; middle-drag pans; pinch/wheel zoom |
+| Co-op (`?coop=1`) | P2: arrows + Enter, second keymap (not rebindable) |
+
+## Stack
+
+| Layer | Role |
+| --- | --- |
+| **Rust → Wasm** | Authoritative simulation: grid, flow-field pathing, combat, economy, waves |
+| **TypeScript** | Canvas battlefield, game loop, input |
+| **SvelteKit** | Shell, briefing, command HUD |
+
+The browser never decides hits, pathing, or prices. It sends orders; the engine returns a snapshot.
+
+## Requirements
+
+- Rust 1.80+ with `wasm32-unknown-unknown` (`rustup target add wasm32-unknown-unknown`)
+- [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+- Node.js 22+
+
+## Develop
+
+```bash
+npm install --prefix web
+npm run dev
+```
+
+Then open the URL Vite prints (usually `http://localhost:5173`). After changing Rust, run `npm run wasm` again (or restart `npm run dev`) so the browser picks up a new module.
+
+```bash
+npm test              # Rust simulation tests
+npm run check         # Wasm + Svelte/TS
+npm run build         # Release Wasm + static site in web/build
+cargo run -p otd-bench -- --map kilo --until-wave 8
+cargo run -p otd-bench -- --validate path/to/map.json
+cargo run -p otd-bench -- --verify path/to/replay.json
+cargo run -p otd-bench -- --validate-pack path/to/pack.json
+```
+
+## Repository layout
+
+```
+crates/otd-core   Pure Rust simulation (native tests)
+crates/otd-wasm   wasm-bindgen façade
+crates/otd-bench  Headless validator / replay runner
+web/              SvelteKit client
+docs/             Architecture, roadmap, gameplay
+```
+
+## Docs
+
+- [Gameplay](docs/GAMEPLAY.md) — how a match works, roster, economy
+- [Architecture](docs/ARCHITECTURE.md) — engine, snapshot, UI boundaries
+- [Roadmap](docs/ROADMAP.md) — phases 1–11 (1.0)
+
+## Contributing
+
+Play it. Break it. File issues with wave number and what you built. Balance patches and new maps should land as data in `otd-core` whenever possible, not as one-off UI hacks.
+
+Please keep the simulation deterministic: same orders, same seed, same match.

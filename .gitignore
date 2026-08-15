@@ -1,0 +1,16 @@
+/target
+**/*.rs.bk
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+web/node_modules
+web/.svelte-kit
+web/build
+web/.vite
+web/src/lib/wasm
+web/src/lib/wasm/**
+
+.env
+.env.*
