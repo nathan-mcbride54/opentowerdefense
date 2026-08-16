@@ -240,9 +240,9 @@ button:disabled:not(.build) {
 	cursor: default;
 }
 
-/* Unaffordable tray tiles read as a sunken, dead plate. The grayscale is scoped to the
-   icon and labels: on the tile itself it also desaturated the red border and the dashed
-   underscore below, turning the warning channel muddy brown. */
+/* Unaffordable tray tiles read as a sunken, dead plate: recessed shadow, red border and
+   a greyed-out icon. The grayscale stays scoped to the icon and labels — on the tile it
+   would desaturate the red border too, turning the warning muddy brown. */
 .build:disabled {
 	opacity: 1;
 	cursor: default;
@@ -265,13 +265,6 @@ button:disabled:not(.build) {
 	color: #e8748a;
 }
 
-.build:disabled::after {
-	content: '';
-	position: absolute;
-	inset: auto 0 0 0;
-	height: 2px;
-	background: repeating-linear-gradient(90deg, #e8748a 0 3px, transparent 3px 6px);
-}
 
 /* Affordability is the economy made visible: as scrap accrues the tray lights up from
    cheapest to dearest, so the price ladder is learned without reading a number. */

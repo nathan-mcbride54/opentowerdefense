@@ -15,7 +15,6 @@ const BASE = {
 	rockShade: '#24231f',
 	// The grid is a placement tool, not a combat tool — quiet until a structure is held.
 	grid: 'rgba(240, 169, 76, 0.10)',
-	gridHot: 'rgba(255, 196, 110, 0.55)',
 	spawn: 'rgba(200, 84, 96, 0.30)',
 	spawnEdge: 'rgba(232, 115, 107, 0.55)',
 	core: '#ffc46e',
@@ -95,7 +94,6 @@ function buildPalette(palette: Palette): Colors {
 			core: '#ffd98a',
 			runner: '#ffa251',
 			wasp: '#ffe89a',
-			gridHot: 'rgba(255, 214, 150, 0.8)',
 			valid: 'rgba(255, 214, 150, 0.8)',
 			invalid: 'rgba(255, 110, 100, 0.8)'
 		};
@@ -260,8 +258,7 @@ export class BattlefieldRenderer {
 		}
 
 		this.drawSpawns(map, snap.time);
-		const placing = snap.build > 0 || snap.build2 > 0 || snap.strike > 0 || snap.strike2 > 0;
-		this.drawGrid(map, placing);
+		this.drawGrid(map);
 		this.drawCore(snap);
 		this.drawWalls(snap.walls);
 		this.drawWalk(snap.walkPaths);
@@ -312,7 +309,7 @@ export class BattlefieldRenderer {
 		);
 	}
 
-	private drawGrid(map: MapStatic, hot = false) {
+	private drawGrid(map: MapStatic) {
 		const { ctx } = this;
 		ctx.save();
 		ctx.beginPath();
@@ -328,8 +325,8 @@ export class BattlefieldRenderer {
 		}
 		ctx.stroke();
 		ctx.beginPath();
-		ctx.strokeStyle = hot ? this.cols.gridHot : this.cols.grid;
-		ctx.lineWidth = hot ? 0.07 : 0.05;
+		ctx.strokeStyle = this.cols.grid;
+		ctx.lineWidth = 0.05;
 		for (let x = 0; x <= map.w; x++) {
 			ctx.moveTo(x, 0);
 			ctx.lineTo(x, map.h);
