@@ -116,7 +116,6 @@ export class BattlefieldRenderer {
 	private zoom = 1;
 	private panX = 0;
 	private panY = 0;
-	private mini = { x: 0, y: 0, w: 0, h: 0 };
 
 	constructor(canvas: HTMLCanvasElement) {
 		const ctx = canvas.getContext('2d');
@@ -232,37 +231,7 @@ export class BattlefieldRenderer {
 		const cx = Math.floor(x);
 		const cy = Math.floor(y);
 		if (cx < 0 || cy < 0 || cx >= map.w || cy >= map.h) return null;
-		if (this.overMinimap(clientX, clientY)) return null;
 		return { x: cx, y: cy };
-	}
-
-	overMinimap(clientX: number, clientY: number): boolean {
-		return this.minimapCell(clientX, clientY) != null;
-	}
-
-	minimapCell(clientX: number, clientY: number): { x: number; y: number } | null {
-		const map = this.map;
-		if (!map || this.mini.w <= 0) return null;
-		const rect = this.canvas.getBoundingClientRect();
-		const px = clientX - rect.left;
-		const py = clientY - rect.top;
-		const { x, y, w, h } = this.mini;
-		if (px < x || py < y || px > x + w || py > y + h) return null;
-		const cx = Math.max(0, Math.min(map.w - 1, Math.floor(((px - x) / w) * map.w)));
-		const cy = Math.max(0, Math.min(map.h - 1, Math.floor(((py - y) / h) * map.h)));
-		return { x: cx, y: cy };
-	}
-
-	lookAt(cx: number, cy: number) {
-		const map = this.map;
-		if (!map) return;
-		this.zoom = Math.max(this.zoom, 2.2);
-		const { cssW, cssH } = this.layout;
-		const scale = this.fit * this.zoom;
-		this.panX = cssW / 2 - (cx + 0.5) * scale - (cssW - map.w * scale) / 2;
-		this.panY = cssH / 2 - (cy + 0.5) * scale - (cssH - map.h * scale) / 2;
-		this.clampView();
-		this.syncLayout();
 	}
 
 	render(snap: Snapshot, paused: boolean) {
@@ -277,8 +246,7 @@ export class BattlefieldRenderer {
 		ctx.fillRect(0, 0, cssW, cssH);
 
 		ctx.save();
-		// The shake wraps only the world layer, so the minimap drawn after `restore()`
-		// stays where `this.mini` says its hit box is.
+		// The shake wraps only the world layer so overlays drawn after `restore()` stay put.
 		if (snap.hurtFlash > 0 && !this.reducedFx) {
 			const p = snap.hurtFlash;
 			ctx.translate(p * 5 * Math.sin(snap.time * 52), p * 3.5 * Math.cos(snap.time * 41));
@@ -322,7 +290,6 @@ export class BattlefieldRenderer {
 			ctx.fillStyle = 'rgba(5, 6, 5, 0.38)';
 			ctx.fillRect(0, 0, cssW, cssH);
 		}
-		this.drawMinimap(snap);
 	}
 
 	private paintTerrain() {
@@ -343,69 +310,6 @@ export class BattlefieldRenderer {
 			},
 			2
 		);
-	}
-
-	private drawMinimap(snap: Snapshot) {
-		const map = this.map;
-		if (!map) return;
-		const { ctx } = this;
-		const { cssW, cssH, scale, ox, oy } = this.layout;
-		const maxW = Math.min(156, cssW * 0.28);
-		const maxH = Math.min(110, cssH * 0.28);
-		const cell = Math.min(maxW / map.w, maxH / map.h);
-		const w = map.w * cell;
-		const h = map.h * cell;
-		const x = 10;
-		const y = cssH - h - 12;
-		this.mini = { x, y, w, h };
-		ctx.save();
-		ctx.fillStyle = 'rgba(5, 6, 5, 0.92)';
-		ctx.fillRect(x - 3, y - 3, w + 6, h + 6);
-		ctx.strokeStyle = 'rgba(240, 169, 76, 0.45)';
-		ctx.lineWidth = 1;
-		ctx.strokeRect(x - 3, y - 3, w + 6, h + 6);
-		if (this.terrain) {
-			ctx.imageSmoothingEnabled = false;
-			ctx.drawImage(this.terrain, x, y, w, h);
-		} else {
-			ctx.fillStyle = this.cols.soil;
-			ctx.fillRect(x, y, w, h);
-			ctx.fillStyle = this.cols.rock;
-			for (const [rx, ry] of map.rocks) {
-				ctx.fillRect(x + rx * cell, y + ry * cell, cell, cell);
-			}
-		}
-		ctx.fillStyle = this.cols.wall;
-		for (const [wx, wy] of snap.walls) {
-			ctx.fillRect(x + wx * cell, y + wy * cell, cell, cell);
-		}
-		ctx.fillStyle = this.cols.spawnEdge;
-		for (const [sx, sy] of map.spawns) {
-			ctx.fillRect(x + sx * cell, y + sy * cell, cell, cell);
-		}
-		ctx.fillStyle = this.cols.core;
-		for (const [cx, cy] of map.core) {
-			ctx.fillRect(x + cx * cell, y + cy * cell, cell, cell);
-		}
-		for (const c of snap.creeps) {
-			ctx.fillStyle =
-				c.kind === 'shade'
-					? this.cols.shade
-					: c.kind === 'flicker'
-						? this.cols.flicker
-						: c.flying
-							? this.cols.wasp
-							: this.cols.runner;
-			ctx.fillRect(x + c.x * cell - 1, y + c.y * cell - 1, 2, 2);
-		}
-		const viewX = -ox / scale;
-		const viewY = -oy / scale;
-		const viewW = cssW / scale;
-		const viewH = cssH / scale;
-		ctx.strokeStyle = 'rgba(240, 169, 76, 0.9)';
-		ctx.lineWidth = 1;
-		ctx.strokeRect(x + viewX * cell, y + viewY * cell, viewW * cell, viewH * cell);
-		ctx.restore();
 	}
 
 	private drawGrid(map: MapStatic, hot = false) {

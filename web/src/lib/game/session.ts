@@ -121,7 +121,6 @@ export async function createSession(
 	const pointers = new Map<number, { x: number; y: number; ox: number; oy: number }>();
 	let panned = false;
 	let pinch0: { dist: number; zoomMidX: number; zoomMidY: number } | null = null;
-	let miniNav = false;
 	let lastPaint: { x: number; y: number } | null = null;
 	let p2Paint = false;
 	let handBuild = 0;
@@ -203,15 +202,7 @@ export async function createSession(
 		canvas.setPointerCapture(ev.pointerId);
 		pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, ox: ev.clientX, oy: ev.clientY });
 		panned = false;
-		miniNav = false;
 		lastPaint = null;
-		const mini = renderer.minimapCell(ev.clientX, ev.clientY);
-		if (mini) {
-			renderer.lookAt(mini.x, mini.y);
-			miniNav = true;
-			panned = true;
-			return;
-		}
 		if (pointers.size === 2) {
 			const pts = [...pointers.values()];
 			pinch0 = {
@@ -229,11 +220,6 @@ export async function createSession(
 
 	const onPointerMove = (ev: PointerEvent) => {
 		viewDirty = true;
-		if (miniNav) {
-			const mini = renderer.minimapCell(ev.clientX, ev.clientY);
-			if (mini) renderer.lookAt(mini.x, mini.y);
-			return;
-		}
 		const prev = pointers.get(ev.pointerId);
 		if (prev) {
 			const now = { x: ev.clientX, y: ev.clientY, ox: prev.ox, oy: prev.oy };
@@ -292,7 +278,6 @@ export async function createSession(
 		// pan and hover updates stop until the next press.
 		if (pointers.size === 0) {
 			panned = false;
-			miniNav = false;
 			lastPaint = null;
 		}
 		try {
@@ -520,7 +505,6 @@ export async function createSession(
 		pointers.clear();
 		pinch0 = null;
 		panned = false;
-		miniNav = false;
 		lastPaint = null;
 	};
 

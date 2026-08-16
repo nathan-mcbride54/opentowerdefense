@@ -848,23 +848,6 @@ kbd {
 	border-top: 1px solid var(--line);
 }
 
-.stage-chip {
-	border-radius: var(--r-pill);
-	position: absolute;
-	top: 0.55rem;
-	left: 0.55rem;
-	z-index: 3;
-	pointer-events: none;
-	font-family: var(--cond);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
-	font-size: 0.72rem;
-	color: var(--ice);
-	text-shadow: 0 1px 6px #000;
-	background: rgba(5, 6, 5, 0.62);
-	border: 1px solid var(--line);
-	padding: 0.18rem 0.45rem;
-}
 
 .dock {
 	background: linear-gradient(180deg, var(--s-4) 0%, var(--s-2) 28%, var(--s-0) 100%);
@@ -1139,6 +1122,28 @@ kbd {
 
 .dock-stat.walk .was {
 	color: var(--muted);
+}
+
+/* Theater name keeps the ice blue it had as a stage chip; the mode qualifies it below. */
+.dock-stat.theater b {
+	font-family: var(--cond);
+	font-weight: 700;
+	font-size: var(--t-2);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--ice);
+	white-space: nowrap;
+}
+
+.dock-stat.theater i {
+	display: block;
+	font-style: normal;
+	font-family: var(--cond);
+	font-size: var(--t-1);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--muted);
+	white-space: nowrap;
 }
 
 .dock-stat.hold.cleared b {
@@ -1519,6 +1524,29 @@ kbd {
 .inspect.p2 h3,
 .inspect.p2 .kicker {
 	color: var(--pulse);
+}
+
+/* The panel floats over the battlefield, so it can cover the very cell you want to
+   click. The header is a grab handle; `draggable` clamps it inside the stage. */
+.inspect-grip {
+	cursor: grab;
+	touch-action: none;
+	margin: -0.2rem -0.2rem 0.15rem;
+	padding: 0.2rem 0.2rem 0.15rem;
+	border-bottom: 1px solid var(--line-1);
+}
+
+.inspect-grip > * {
+	pointer-events: none;
+}
+
+.inspect.dragging {
+	cursor: grabbing;
+	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+}
+
+.inspect.dragging .inspect-grip {
+	cursor: grabbing;
 }
 
 .inspect .kicker {

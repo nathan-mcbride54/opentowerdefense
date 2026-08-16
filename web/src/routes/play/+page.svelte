@@ -5,6 +5,7 @@
 	import ShopPic from '$lib/game/ShopPic.svelte';
 	import CreepPic from '$lib/game/CreepPic.svelte';
 	import SettingsDock from '$lib/game/SettingsDock.svelte';
+	import { draggable } from '$lib/game/draggable';
 	import { formatKey, P2_KEYS, type ActionId } from '$lib/game/keys';
 	import { loadSettings, subscribeSettings } from '$lib/game/settings';
 	import {
@@ -245,18 +246,20 @@
 	const relayFrac = $derived(
 		snap && snap.integrityMax > 0 ? snap.integrity / snap.integrityMax : 1
 	);
-	const matchLabel = $derived(
+	/** Theater name, kept on its own so it can hold the ice blue in the dock. */
+	const matchName = $derived(snap ? (snap.missionName ?? snap.mapName) : '…');
+	/** Everything qualifying the match: modifier, then any custom loadout. */
+	const matchMode = $derived(
 		snap
 			? [
-					snap.missionName ??
-						(snap.modifierName && snap.modifierName !== 'Standard'
-							? `${snap.mapName} · ${snap.modifierName}`
-							: snap.mapName),
+					snap.missionName == null && snap.modifierName !== 'Standard'
+						? snap.modifierName
+						: null,
 					snap.packName
 				]
 					.filter(Boolean)
 					.join(' · ')
-			: '…'
+			: ''
 	);
 
 	function keepGoing() {
@@ -266,10 +269,12 @@
 </script>
 
 {#snippet inspectPanel(sel: SelectedInfo, player: number, extraClass: string, p2: boolean)}
-	<aside class="inspect {extraClass}">
-		<p class="kicker">{p2 ? 'Commander 2' : 'Selected unit'}</p>
-		<h3>{sel.name}</h3>
-		<p class="hint">{sel.tierName}</p>
+	<aside class="inspect {extraClass}" use:draggable={{ handle: '.inspect-grip' }}>
+		<div class="inspect-grip" title="Drag to move this panel">
+			<p class="kicker">{p2 ? 'Commander 2' : 'Selected unit'}</p>
+			<h3>{sel.name}</h3>
+			<p class="hint">{sel.tierName}</p>
+		</div>
 		<dl>
 			<dt>Tier</dt>
 			<dd>{sel.tier}/{sel.maxTier}</dd>
@@ -340,9 +345,6 @@
 	<div class="play">
 		<div class="stage">
 			<canvas bind:this={canvas}></canvas>
-			{#if matchLabel}
-				<span class="stage-chip">{matchLabel}</span>
-			{/if}
 			{#if !session && !error}
 				<div class="loading">Linking simulation</div>
 			{/if}
@@ -593,6 +595,13 @@
 					<div class="dock-stat wave" class:incoming={snap?.status === 'incoming'}>
 						<span>Wave</span>
 						<b>{snap?.wave ?? '—'}</b>
+					</div>
+					<div class="dock-stat theater">
+						<span>Theater</span>
+						<b>{matchName}</b>
+						{#if matchMode}
+							<i>{matchMode}</i>
+						{/if}
 					</div>
 					{#if snap}
 						<div class="dock-stat walk">
