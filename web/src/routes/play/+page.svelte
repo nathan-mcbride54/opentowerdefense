@@ -526,7 +526,7 @@
 						class:hurt={relayFrac <= 0.6 && relayFrac > 0.25}
 						class:crit={relayFrac <= 0.25}
 					>
-						<span>Relay</span>
+						<span>Tower</span>
 						<b>{snap?.integrity ?? '—'}{#if snap}<i>/{snap.integrityMax}</i>{/if}</b>
 					</div>
 					<div class="dock-stat wave" class:incoming={snap?.status === 'incoming'}>

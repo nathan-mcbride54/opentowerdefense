@@ -25,6 +25,8 @@ const BASE = {
 	invalid: 'rgba(232, 115, 107, 0.6)',
 	range: 'rgba(240, 169, 76, 0.14)',
 	rangeAir: 'rgba(127, 200, 184, 0.16)',
+	rangeEdge: 'rgba(240, 169, 76, 0.55)',
+	rangeAirEdge: 'rgba(127, 200, 184, 0.6)',
 	hpBack: 'rgba(6, 5, 4, 0.62)',
 	hpOk: '#7fc8b8',
 	hpMid: '#f5c96b',
@@ -95,7 +97,9 @@ function buildPalette(palette: Palette): Colors {
 			runner: '#ffa251',
 			wasp: '#ffe89a',
 			valid: 'rgba(255, 214, 150, 0.8)',
-			invalid: 'rgba(255, 110, 100, 0.8)'
+			invalid: 'rgba(255, 110, 100, 0.8)',
+			rangeEdge: 'rgba(255, 200, 130, 0.8)',
+			rangeAirEdge: 'rgba(150, 225, 210, 0.85)'
 		};
 	}
 	return BASE;
@@ -342,6 +346,7 @@ export class BattlefieldRenderer {
 		const { ctx } = this;
 		const set = new Set(map.spawns.map(([x, y]) => `${x},${y}`));
 		const pulse = 0.45 + 0.2 * Math.sin(time * 3);
+		ctx.save();
 		ctx.fillStyle = this.cols.spawn;
 		ctx.globalAlpha = 0.18;
 		for (const [x, y] of map.spawns) ctx.fillRect(x, y, 1, 1);
@@ -368,7 +373,7 @@ export class BattlefieldRenderer {
 			}
 		}
 		ctx.stroke();
-		ctx.globalAlpha = 1;
+		ctx.restore();
 	}
 
 	private drawCore(snap: Snapshot) {
@@ -389,9 +394,13 @@ export class BattlefieldRenderer {
 	private drawWalls(walls: [number, number][]) {
 		const { ctx } = this;
 		const set = new Set(walls.map(([x, y]) => `${x},${y}`));
+		// drawWallCell leaves fillStyle on an opaque plank brown; fence it in so the next
+		// painter inherits a clean context rather than the last nail it drew.
+		ctx.save();
 		for (const [x, y] of walls) {
 			drawWallCell(ctx, x, y, this.cols, set);
 		}
+		ctx.restore();
 	}
 
 	private drawWalk(paths: [number, number][][] | undefined) {
@@ -534,6 +543,11 @@ export class BattlefieldRenderer {
 	) {
 		if (!src || src.range <= 0) return;
 		const { ctx } = this;
+		// Both styles must be set here. Filling with whatever the previous draw left on the
+		// context painted the range as an opaque barricade brown over the terrain.
+		ctx.save();
+		ctx.fillStyle = src.air ? this.cols.rangeAir : this.cols.range;
+		ctx.strokeStyle = src.air ? this.cols.rangeAirEdge : this.cols.rangeEdge;
 		ctx.beginPath();
 		ctx.arc(src.cx, src.cy, src.range, 0, Math.PI * 2);
 		ctx.fill();
@@ -541,6 +555,7 @@ export class BattlefieldRenderer {
 		ctx.lineWidth = 0.045;
 		ctx.stroke();
 		ctx.setLineDash([]);
+		ctx.restore();
 	}
 
 	private drawTowers(towers: TowerView[], selectedId: number | null) {
