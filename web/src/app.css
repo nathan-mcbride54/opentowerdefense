@@ -1124,26 +1124,37 @@ kbd {
 	color: var(--muted);
 }
 
-/* Theater name keeps the ice blue it had as a stage chip; the mode qualifies it below. */
-.dock-stat.theater b {
+/* Over the field rather than in the dock: the dock is already the tallest thing on
+   screen, and this costs it no height at all. */
+.stage-chip {
+	position: absolute;
+	top: 0.55rem;
+	left: 0.55rem;
+	z-index: 3;
+	pointer-events: none;
+	display: flex;
+	align-items: baseline;
+	gap: 0.45rem;
+	padding: 0.16rem 0.6rem;
+	border-radius: var(--r-pill);
+	background: rgba(5, 5, 6, 0.66);
+	border: 1px solid var(--line);
 	font-family: var(--cond);
-	font-weight: 700;
-	font-size: var(--t-2);
-	letter-spacing: 0.06em;
+	letter-spacing: 0.12em;
 	text-transform: uppercase;
-	color: var(--ice);
-	white-space: nowrap;
+	text-shadow: 0 1px 6px #000;
 }
 
-.dock-stat.theater i {
-	display: block;
-	font-style: normal;
-	font-family: var(--cond);
+.stage-chip b {
 	font-size: var(--t-1);
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
+	font-weight: 700;
+	color: var(--ice);
+}
+
+.stage-chip i {
+	font-style: normal;
+	font-size: var(--t-1);
 	color: var(--muted);
-	white-space: nowrap;
 }
 
 .dock-stat.hold.cleared b {

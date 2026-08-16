@@ -345,6 +345,9 @@
 	<div class="play">
 		<div class="stage">
 			<canvas bind:this={canvas}></canvas>
+			<span class="stage-chip">
+				<b>{matchName}</b>{#if matchMode}<i>{matchMode}</i>{/if}
+			</span>
 			{#if !session && !error}
 				<div class="loading">Linking simulation</div>
 			{/if}
@@ -595,13 +598,6 @@
 					<div class="dock-stat wave" class:incoming={snap?.status === 'incoming'}>
 						<span>Wave</span>
 						<b>{snap?.wave ?? '—'}</b>
-					</div>
-					<div class="dock-stat theater">
-						<span>Theater</span>
-						<b>{matchName}</b>
-						{#if matchMode}
-							<i>{matchMode}</i>
-						{/if}
 					</div>
 					{#if snap}
 						<div class="dock-stat walk">
