@@ -24,12 +24,25 @@
 	let s = $state<Settings>(loadSettings());
 	let capturing = $state<ActionId | null>(null);
 
+	/** Teardown for an armed rebind. A pending capture must never outlive the panel:
+	 *  a leaked capture-phase listener swallows the next keypress anywhere in the app
+	 *  and silently rebinds the wrong action. */
+	let cancelCapture: (() => void) | null = null;
+
 	onMount(() => {
 		applyUiScale(s.uiScale);
-		return subscribeSettings(() => {
+		const unsub = subscribeSettings(() => {
 			s = loadSettings();
 			applyUiScale(s.uiScale);
 		});
+		return () => {
+			unsub();
+			cancelCapture?.();
+		};
+	});
+
+	$effect(() => {
+		if (!open) cancelCapture?.();
 	});
 
 	function setPalette(palette: Palette) {
@@ -41,18 +54,20 @@
 	}
 
 	function capture(id: ActionId) {
+		cancelCapture?.();
 		capturing = id;
 		const on = (ev: KeyboardEvent) => {
 			ev.preventDefault();
 			ev.stopImmediatePropagation();
-			if (ev.key === 'Escape' && id !== 'cancel') {
-				capturing = null;
-				window.removeEventListener('keydown', on, true);
-				return;
-			}
-			rebindKey(id, normalizeKey(ev));
-			capturing = null;
+			// Chords belong to the browser; binding one would make it unreachable in play.
+			if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+			if (ev.key !== 'Escape' || id === 'cancel') rebindKey(id, normalizeKey(ev));
+			cancelCapture?.();
+		};
+		cancelCapture = () => {
 			window.removeEventListener('keydown', on, true);
+			capturing = null;
+			cancelCapture = null;
 		};
 		window.addEventListener('keydown', on, true);
 	}
@@ -145,15 +160,22 @@
 		max-height: min(70vh, 36rem);
 		overflow: auto;
 		padding: 0.75rem 0.85rem;
-		background: var(--bg-2);
-		border: 1px solid var(--line);
+		background: linear-gradient(180deg, #141816, #070807);
+		border: 1px solid rgba(77, 184, 212, 0.4);
+		box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 		display: flex;
 		flex-direction: column;
 		gap: 0.55rem;
 	}
+	/* Compact is only used by the play dock, whose gear sits at the right edge —
+	   left-anchoring pushed the panel past the viewport, where `.play { overflow: hidden }`
+	   clipped the right column of key binds. */
 	.compact .panel {
-		right: auto;
-		left: 0;
+		right: 0;
+		left: auto;
+		bottom: calc(100% + 0.4rem);
+		top: auto;
+		max-width: calc(100vw - 1.5rem);
 	}
 	.row {
 		display: flex;

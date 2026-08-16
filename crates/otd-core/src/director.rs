@@ -25,7 +25,7 @@ impl WaveScript {
     }
 
     pub fn for_wave(wave: u32, ground_only: bool) -> Self {
-        if wave > 0 && wave % 10 == 0 {
+        if wave > 0 && wave.is_multiple_of(10) {
             return Self::Colossus;
         }
         if ground_only {

@@ -85,6 +85,47 @@ impl Grid {
         self.fill_rect(x, y, w, h, Terrain::Rock);
     }
 
+    /// Organic plateau. Only paints empty cells so cores and spawns stay intact.
+    pub fn stamp_blob(&mut self, cx: f32, cy: f32, rx: f32, ry: f32) {
+        if rx <= 0.0 || ry <= 0.0 {
+            return;
+        }
+        let x0 = ((cx - rx).floor() as i32).max(0);
+        let y0 = ((cy - ry).floor() as i32).max(0);
+        let x1 = ((cx + rx).ceil() as i32).min(self.w - 1);
+        let y1 = ((cy + ry).ceil() as i32).min(self.h - 1);
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let Some(i) = self.try_idx(x, y) else {
+                    continue;
+                };
+                if self.terrain[i] != Terrain::Empty {
+                    continue;
+                }
+                let dx = (x as f32 + 0.5 - cx) / rx;
+                let dy = (y as f32 + 0.5 - cy) / ry;
+                let h = x
+                    .wrapping_mul(374_761_393)
+                    .wrapping_add(y.wrapping_mul(668_265_263)) as u32;
+                let n = (h >> 11) as f32 / ((u32::MAX >> 11) as f32) * 2.0 - 1.0;
+                if dx * dx + dy * dy <= (1.0 + n * 0.16).max(0.48) {
+                    self.terrain[i] = Terrain::Rock;
+                }
+            }
+        }
+    }
+
+    /// Punch a 1–2 cell pass through rock. Leaves cores and spawns alone.
+    pub fn carve_gap(&mut self, x: i32, y: i32, w: i32, h: i32) {
+        for yy in y..y + h {
+            for xx in x..x + w {
+                if matches!(self.terrain_at(xx, yy), Some(Terrain::Rock)) {
+                    self.set_terrain(xx, yy, Terrain::Empty);
+                }
+            }
+        }
+    }
+
     pub fn blocks_ground(&self, x: i32, y: i32) -> bool {
         if !self.in_bounds(x, y) {
             return true;
@@ -165,15 +206,25 @@ impl Grid {
     }
 
     pub fn nearest_core(&self, pos: crate::geom::Vec2) -> crate::geom::Vec2 {
-        let clusters = self.core_clusters();
+        Self::nearest_of(&self.core_clusters(), self.core_center(), pos)
+    }
+
+    /// Pick the closest cluster centroid. Same tie-break as the original `min_by`, so a
+    /// cached cluster list produces bit-identical results to recomputing one.
+    pub fn nearest_of(
+        clusters: &[crate::geom::Vec2],
+        fallback: crate::geom::Vec2,
+        pos: crate::geom::Vec2,
+    ) -> crate::geom::Vec2 {
         clusters
-            .into_iter()
+            .iter()
+            .copied()
             .min_by(|a, b| {
                 a.dist(pos)
                     .partial_cmp(&b.dist(pos))
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
-            .unwrap_or_else(|| self.core_center())
+            .unwrap_or(fallback)
     }
 
     /// Centroids of 4-connected core cell groups (one entry per relay).
@@ -189,7 +240,7 @@ impl Grid {
             let mut group = vec![(sx, sy)];
             while let Some((x, y)) = stack.pop() {
                 for (nx, ny) in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)] {
-                    if cells.iter().any(|&c| c == (nx, ny)) && seen.insert((nx, ny)) {
+                    if cells.contains(&(nx, ny)) && seen.insert((nx, ny)) {
                         stack.push((nx, ny));
                         group.push((nx, ny));
                     }

@@ -115,6 +115,8 @@ export async function createSession(
 	let raf = 0;
 	let lastSnap: Snapshot | null = null;
 	let recordedDefeat = false;
+	/** Set by anything that can change the snapshot or the view while the sim is paused. */
+	let viewDirty = true;
 
 	const pointers = new Map<number, { x: number; y: number; ox: number; oy: number }>();
 	let panned = false;
@@ -157,14 +159,26 @@ export async function createSession(
 			if (steps === MAX_STEPS) acc = 0;
 		}
 		if (coop) game.setHoverP(1, p2x, p2y);
-		const snap = read();
 		renderer.setLook(settings.palette, settings.reducedFx);
+		// While paused nothing in the sim moves, so re-parsing a ~20KB snapshot and
+		// re-emitting it (which invalidates the whole HUD) 60x/second is pure waste.
+		// The view can still change, so keep rendering the snapshot we already have.
+		if (paused && lastSnap && !viewDirty) {
+			renderer.render(lastSnap, paused);
+			raf = requestAnimationFrame(loop);
+			return;
+		}
+		viewDirty = false;
+		const snap = read();
 		renderer.render(snap, paused);
 		emit(snap);
 		raf = requestAnimationFrame(loop);
 	};
 
-	const onResize = () => renderer.resize();
+	const onResize = () => {
+		viewDirty = true;
+		renderer.resize();
+	};
 	const ro = new ResizeObserver(onResize);
 	ro.observe(canvas);
 
@@ -184,6 +198,7 @@ export async function createSession(
 	};
 
 	const onPointerDown = (ev: PointerEvent) => {
+		viewDirty = true;
 		if (ev.button === 2) return;
 		canvas.setPointerCapture(ev.pointerId);
 		pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, ox: ev.clientX, oy: ev.clientY });
@@ -213,6 +228,7 @@ export async function createSession(
 	};
 
 	const onPointerMove = (ev: PointerEvent) => {
+		viewDirty = true;
 		if (miniNav) {
 			const mini = renderer.minimapCell(ev.clientX, ev.clientY);
 			if (mini) renderer.lookAt(mini.x, mini.y);
@@ -263,14 +279,17 @@ export async function createSession(
 	};
 
 	const onPointerUp = (ev: PointerEvent) => {
+		viewDirty = true;
 		const wasPinch = pointers.size >= 2;
 		pointers.delete(ev.pointerId);
 		pinch0 = null;
-		if (ev.button === 1) return;
-		if (!watch && !panned && !wasPinch && ev.button === 0 && lastPaint == null) {
+		const middle = ev.button === 1;
+		if (!middle && !watch && !panned && !wasPinch && ev.button === 0 && lastPaint == null) {
 			const cell = cellFromEvent(ev);
 			if (cell) game.click(cell.x, cell.y);
 		}
+		// Must run for the middle button too, or `panned` stays true after a middle-drag
+		// pan and hover updates stop until the next press.
 		if (pointers.size === 0) {
 			panned = false;
 			miniNav = false;
@@ -284,10 +303,12 @@ export async function createSession(
 	};
 
 	const onLeave = () => {
+		viewDirty = true;
 		if (!watch && pointers.size === 0) game.clearHover();
 	};
 
 	const onContext = (ev: MouseEvent) => {
+		viewDirty = true;
 		ev.preventDefault();
 		if (!watch) {
 			game.setStrike(0);
@@ -298,6 +319,7 @@ export async function createSession(
 	};
 
 	const onWheel = (ev: WheelEvent) => {
+		viewDirty = true;
 		ev.preventDefault();
 		const factor = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
 		renderer.zoomAt(ev.clientX, ev.clientY, factor);
@@ -309,6 +331,7 @@ export async function createSession(
 	};
 
 	const runAction = (id: ActionId, player = 0) => {
+		viewDirty = true;
 		if (watch && id !== 'pause' && id !== 'speed' && id !== 'mute' && id !== 'viewReset') {
 			if (id === 'cancel') {
 				paused = !paused;
@@ -415,11 +438,29 @@ export async function createSession(
 
 	const onKeyDown = (ev: KeyboardEvent) => {
 		const el = ev.target as HTMLElement | null;
-		if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) {
+		if (
+			el &&
+			(el.tagName === 'INPUT' ||
+				el.tagName === 'TEXTAREA' ||
+				el.tagName === 'SELECT' ||
+				el.isContentEditable)
+		) {
 			return;
 		}
+		// Chords belong to the browser: Ctrl+F must open find, not cycle playback speed.
+		if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
 		const key = normalizeKey(ev);
-		if (coop) {
+		// A focused HUD button already activates on Space/Enter; letting the bind fire too
+		// would double-handle the press (e.g. re-click the button *and* toggle pause).
+		// `ev.target` is only an Element for focused DOM nodes — it can be document or
+		// window, which have no closest().
+		const focusedControl =
+			el instanceof Element ? el.closest('button, a, summary, [role="button"]') : null;
+		if ((key === 'space' || key === 'enter') && focusedControl) return;
+		// P1 binds win when a key is on both maps, so resolve P1 before the P2 cursor keys.
+		const p1Early = actionForKey(settings.keys, key);
+		if (coop && !p1Early) {
+			if (ev.repeat && key === 'enter') return;
 			if (key === 'arrowup') {
 				p2y = Math.max(0, p2y - 1);
 				if (p2Paint) game.clickP(1, p2x, p2y);
@@ -451,8 +492,10 @@ export async function createSession(
 				return;
 			}
 		}
-		if (ev.repeat && ev.key !== ' ') return;
-		const p1 = actionForKey(settings.keys, key);
+		// Auto-repeat must not reach any bind. Pause is bound to Space by default, so the
+		// old `ev.key !== ' '` exemption made holding Space strobe pause at the repeat rate.
+		if (ev.repeat) return;
+		const p1 = p1Early;
 		if (p1) {
 			runAction(p1);
 			ev.preventDefault();
@@ -471,6 +514,16 @@ export async function createSession(
 		if (normalizeKey(ev) === 'enter') p2Paint = false;
 	};
 
+	// A key held while the window loses focus never delivers its keyup, so drop held state.
+	const onBlur = () => {
+		p2Paint = false;
+		pointers.clear();
+		pinch0 = null;
+		panned = false;
+		miniNav = false;
+		lastPaint = null;
+	};
+
 	canvas.addEventListener('pointermove', onPointerMove);
 	canvas.addEventListener('pointerleave', onLeave);
 	canvas.addEventListener('pointerdown', onPointerDown);
@@ -480,6 +533,7 @@ export async function createSession(
 	canvas.addEventListener('wheel', onWheel, { passive: false });
 	window.addEventListener('keydown', onKeyDown);
 	window.addEventListener('keyup', onKeyUp);
+	window.addEventListener('blur', onBlur);
 	window.addEventListener('pointerdown', unlock);
 	window.addEventListener('keydown', unlock);
 
@@ -489,6 +543,7 @@ export async function createSession(
 
 	return {
 		destroy() {
+			viewDirty = true;
 			destroyed = true;
 			cancelAnimationFrame(raf);
 			ro.disconnect();
@@ -503,11 +558,13 @@ export async function createSession(
 			canvas.removeEventListener('wheel', onWheel);
 			window.removeEventListener('keydown', onKeyDown);
 			window.removeEventListener('keyup', onKeyUp);
+			window.removeEventListener('blur', onBlur);
 			window.removeEventListener('pointerdown', unlock);
 			window.removeEventListener('keydown', unlock);
 			game.free();
 		},
 		setBuild(id: number, player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.setBuildP(player === 1 ? 1 : 0, id);
 			if (player !== 1) {
@@ -516,6 +573,7 @@ export async function createSession(
 			}
 		},
 		setStrike(id: number, player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.setStrikeP(player === 1 ? 1 : 0, id);
 			if (player !== 1) {
@@ -524,30 +582,37 @@ export async function createSession(
 			}
 		},
 		upgrade(player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.upgradeP(player === 1 ? 1 : 0);
 		},
 		sell(player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.sellP(player === 1 ? 1 : 0);
 		},
 		callWave() {
+			viewDirty = true;
 			if (watch) return;
 			game.callWave();
 		},
 		cycleTargeting(player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.cycleTargetingP(player === 1 ? 1 : 0);
 		},
 		convert(player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.convertP(player === 1 ? 1 : 0);
 		},
 		repair(player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.repairP(player === 1 ? 1 : 0);
 		},
 		lift(player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.liftP(player === 1 ? 1 : 0);
 			if (player !== 1) {
@@ -556,18 +621,22 @@ export async function createSession(
 			}
 		},
 		overcharge(player = 0) {
+			viewDirty = true;
 			if (watch) return;
 			game.overchargeP(player === 1 ? 1 : 0);
 		},
 		togglePause() {
+			viewDirty = true;
 			paused = !paused;
 			if (lastSnap) emit(lastSnap);
 		},
 		cycleSpeed() {
+			viewDirty = true;
 			cycle();
 			if (lastSnap) emit(lastSnap);
 		},
 		resetView() {
+			viewDirty = true;
 			renderer.resetView();
 		},
 		replayJson() {

@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { createSession, PACK_STORAGE, REPLAY_STORAGE, WORKSHOP_STORAGE, type Session, type SessionOpts } from '$lib/game/session';
+	import ShopPic from '$lib/game/ShopPic.svelte';
+	import CreepPic from '$lib/game/CreepPic.svelte';
 	import SettingsDock from '$lib/game/SettingsDock.svelte';
 	import { formatKey, P2_KEYS, type ActionId } from '$lib/game/keys';
 	import { loadSettings, subscribeSettings } from '$lib/game/settings';
@@ -9,6 +11,7 @@
 		markCampaignCleared,
 		readBestWave,
 		type CatalogItem,
+		type CreepKind,
 		type KindCount,
 		type SelectedInfo,
 		type Snapshot,
@@ -57,12 +60,15 @@
 		if (seedHex) return `/play?map=${mapId}&mod=${modId}&seed=${encodeURIComponent(seedHex)}${extra}`;
 		return `/play?map=${mapId}&mod=${modId}${extra}`;
 	})();
+	/** Mission count comes from the engine's campaign list, not a hardcoded index. */
+	let missionCount = $state(8);
+	const lastMission = $derived(missionCount - 1);
 	const nextMissionHref = $derived(
-		snap?.missionId != null && snap.missionId < 7
+		snap?.missionId != null && snap.missionId < lastMission
 			? `/play?mission=${snap.missionId + 1}${coopParam ? '&coop=1' : ''}`
 			: '/campaign'
 	);
-	const campaignDone = $derived(snap?.missionId === 7 && snap.objectiveCleared);
+	const campaignDone = $derived(snap?.missionId === lastMission && snap.objectiveCleared);
 
 	function bindLabel(id: ActionId) {
 		return formatKey(keys[id]);
@@ -86,13 +92,33 @@
 		return parts.map((p) => `${p.count} ${p.name}`).join(' · ');
 	}
 
+	function waveIcons(parts: KindCount[] | undefined) {
+		if (!parts?.length) return [];
+		const out: { kind: CreepKind; name: string; key: string }[] = [];
+		for (const p of parts) {
+			const cap = p.kind === 'colossus' ? 2 : p.kind === 'bulwark' ? 4 : 7;
+			const n = Math.min(Math.max(1, p.count), cap);
+			for (let i = 0; i < n; i++) {
+				out.push({ kind: p.kind, name: p.name, key: `${p.kind}-${i}` });
+			}
+		}
+		return out.slice(0, 16);
+	}
+
 	onMount(() => {
 		if (!canvas) return;
 		const unsub = subscribeSettings(() => {
 			keys = loadSettings().keys;
 		});
+		void (async () => {
+			const { default: init, WasmGame } = await import('$lib/wasm/otd');
+			await init();
+			const list = JSON.parse(WasmGame.campaign()) as unknown[];
+			if (list.length > 0) missionCount = list.length;
+		})();
 		best = readBestWave(mapId, modId);
 		let active: Session | null = null;
+		let dead = false;
 		let primed = false;
 		const mapJson = workshop ? sessionStorage.getItem(WORKSHOP_STORAGE) : null;
 		const packJson = usePack ? sessionStorage.getItem(PACK_STORAGE) : null;
@@ -174,13 +200,21 @@
 			)
 		)
 			.then((s) => {
+				// The component can unmount while wasm is still loading; without this the
+				// session would be created after cleanup ran and never torn down.
+				if (dead) {
+					s.destroy();
+					return;
+				}
 				active = s;
 				session = s;
 			})
 			.catch((e: unknown) => {
+				if (dead) return;
 				error = e instanceof Error ? e.message : 'Failed to link simulation';
 			});
 		return () => {
+			dead = true;
 			unsub();
 			active?.destroy();
 		};
@@ -191,7 +225,7 @@
 		return sel.damage / sel.fireInterval;
 	}
 
-	function targets(item: { hitsGround: boolean; hitsAir: boolean; detects?: boolean }) {
+	function targets(item: CatalogItem | SelectedInfo) {
 		let label = 'Block';
 		if (item.hitsGround && item.hitsAir) label = 'G/A';
 		else if (item.hitsAir) label = 'Air';
@@ -206,6 +240,10 @@
 
 	const atGunCap = $derived(
 		snap?.turretCap != null && snap.turretCount >= snap.turretCap
+	);
+	/** Drives the relay readout's threat colour. 1 when there is no snapshot yet. */
+	const relayFrac = $derived(
+		snap && snap.integrityMax > 0 ? snap.integrity / snap.integrityMax : 1
 	);
 	const matchLabel = $derived(
 		snap
@@ -229,9 +267,7 @@
 
 {#snippet inspectPanel(sel: SelectedInfo, player: number, extraClass: string, p2: boolean)}
 	<aside class="inspect {extraClass}">
-		{#if p2}
-			<p class="kicker">Commander 2</p>
-		{/if}
+		<p class="kicker">{p2 ? 'Commander 2' : 'Selected unit'}</p>
 		<h3>{sel.name}</h3>
 		<p class="hint">{sel.tierName}</p>
 		<dl>
@@ -258,19 +294,19 @@
 		<button
 			type="button"
 			onclick={() => session?.lift(player)}
-			disabled={(snap?.credits ?? 0) < 6}
+			disabled={(snap?.credits ?? 0) < (snap?.moveCost ?? 0)}
 			class:active={p2 ? snap?.relocating2 : snap?.relocating}
 		>
 			{p2 ? (snap?.relocating2 ? 'Cancel move' : 'Move') : snap?.relocating ? 'Cancel move' : 'Move'}
-			{p2 ? p2Bind('move') : bindLabel('move')} · 6
+			{p2 ? p2Bind('move') : bindLabel('move')} · {`$${snap?.moveCost ?? '—'}`}
 		</button>
 		{#if sel.range > 0}
 			<button
 				type="button"
 				onclick={() => session?.overcharge(player)}
-				disabled={(snap?.credits ?? 0) < 40}
+				disabled={(snap?.credits ?? 0) < (snap?.overchargeCost ?? 0)}
 			>
-				Overcharge {p2 ? p2Bind('overcharge') : bindLabel('overcharge')} · 40
+				Overcharge {p2 ? p2Bind('overcharge') : bindLabel('overcharge')} · {`$${snap?.overchargeCost ?? '—'}`}
 			</button>
 		{/if}
 		{#if sel.canConvert}
@@ -279,7 +315,7 @@
 				onclick={() => session?.convert(player)}
 				disabled={(sel.convertCost ?? 1) > (snap?.credits ?? 0)}
 			>
-				Air-tune {p2 ? p2Bind('convert') : bindLabel('convert')} · {sel.convertCost}
+				Air-tune {p2 ? p2Bind('convert') : bindLabel('convert')} · {`$${sel.convertCost}`}
 			</button>
 		{/if}
 		<button
@@ -289,11 +325,11 @@
 		>
 			Upgrade {p2 ? p2Bind('upgrade') : bindLabel('upgrade')}
 			{#if sel.upgradeCost != null}
-				· {sel.upgradeCost}
+				· {`$${sel.upgradeCost}`}
 			{/if}
 		</button>
 		<button type="button" onclick={() => session?.sell(player)}>
-			Sell {p2 ? p2Bind('sell') : bindLabel('sell')} · {sel.sellValue}
+			Sell {p2 ? p2Bind('sell') : bindLabel('sell')} · {`$${sel.sellValue}`}
 		</button>
 	</aside>
 {/snippet}
@@ -302,113 +338,11 @@
 	<div class="boot-error">{error}</div>
 {:else}
 	<div class="play">
-		<header class="topbar">
-			<div class="meters">
-				<div class="meter integrity">
-					<b>{snap?.integrity ?? '—'}</b>
-					<span>Relay</span>
-				</div>
-				<div class="meter credits">
-					<b>{snap?.credits ?? '—'}</b>
-					<span>Scrap</span>
-				</div>
-				{#if snap && snap.interestBps > 0}
-					<div class="meter">
-						<b>
-							{#if snap.interestPaid > 0}+{snap.interestPaid}{:else}{(snap.interestBps / 100).toFixed(0)}%{/if}
-						</b>
-						<span>Interest</span>
-					</div>
-				{/if}
-				<div class="meter wave">
-					<b>{snap?.wave ?? '—'}</b>
-					<span>
-						{#if snap?.status === 'fortify'}
-							Fortify {snap.nextWaveIn.toFixed(1)}s
-						{:else if snap?.status === 'incoming'}
-							{snap.creepsAlive + snap.creepsRemaining} inbound
-						{:else}
-							Wave
-						{/if}
-					</span>
-				</div>
-				<div class="meter">
-					<b>{snap?.kills ?? 0}</b>
-					<span>Kills</span>
-				</div>
-				{#if snap}
-					<div class="meter">
-						<b>
-							{#if snap.hover?.walkAfter != null && snap.hover.walkAfter !== snap.walk}
-								{snap.walk}→{snap.hover.walkAfter}
-							{:else}
-								{snap.walk}
-							{/if}
-						</b>
-						<span>Walk</span>
-					</div>
-				{/if}
-				<div class="meter">
-					<b>{best || '—'}</b>
-					<span>Best</span>
-				</div>
-				{#if snap?.turretCap != null}
-					<div class="meter">
-						<b>{snap.turretCount}/{snap.turretCap}</b>
-						<span>Guns</span>
-					</div>
-				{/if}
-				{#if snap?.objectiveWave != null}
-					<div class="meter">
-						<b>{snap.objectiveCleared ? 'Held' : snap.objectiveWave}</b>
-						<span>{snap.objectiveCleared ? 'Objective' : 'Hold'}</span>
-					</div>
-				{/if}
-				{#if snap?.waveIntel}
-					<div class="meter">
-						<b>{snap.waveIntel.script}</b>
-						<span>{snap.status === 'fortify' ? 'Next' : 'Now'}</span>
-					</div>
-				{/if}
-			</div>
-			<div class="top-actions">
-				<span class="map-chip">{matchLabel}</span>
-				{#if watch}
-					<span class="map-chip coop">Watching replay</span>
-				{/if}
-				{#if coop}
-					<span class="map-chip coop">Co-op · shared scrap</span>
-				{/if}
-				{#if !watch}
-					<button type="button" onclick={() => session?.callWave()} disabled={!snap?.canCallWave}>
-						Call wave {bindLabel('call')}
-					</button>
-					<button
-						type="button"
-						onclick={() => session?.repair()}
-						disabled={
-							!snap ||
-							snap.defeated ||
-							snap.integrity >= snap.integrityMax ||
-							snap.credits < 35
-						}
-					>
-						Repair {bindLabel('repair')} · 35
-					</button>
-				{/if}
-				<button type="button" onclick={() => session?.togglePause()}>
-					{paused ? 'Resume' : 'Pause'} {bindLabel('pause')}
-				</button>
-				<button type="button" onclick={() => session?.cycleSpeed()}>{speed}× {bindLabel('speed')}</button>
-				<button type="button" onclick={() => session?.resetView()}>View</button>
-				<SettingsDock />
-				<a class="btn" href="/campaign">Ops</a>
-				<a class="btn" href="/">Briefing</a>
-			</div>
-		</header>
-
 		<div class="stage">
 			<canvas bind:this={canvas}></canvas>
+			{#if matchLabel}
+				<span class="stage-chip">{matchLabel}</span>
+			{/if}
 			{#if !session && !error}
 				<div class="loading">Linking simulation</div>
 			{/if}
@@ -427,8 +361,8 @@
 			{#if paused && !snap?.defeated && !heldOpen}
 				<div class="defeat pause-overlay">
 					<div class="defeat-card">
-						<p class="kicker">Halted</p>
-						<h2>Command pause</h2>
+						<p class="kicker">Taking a breath</p>
+						<h2>Paused</h2>
 						<p class="hint">
 							{snap?.missionName ?? snap?.mapName} · {snap?.modifierName} · wave {snap?.wave ?? 1}
 							{#if snap?.seedHex}
@@ -450,7 +384,7 @@
 				<div class="defeat held-overlay">
 					<div class="defeat-card">
 						<p class="kicker">Objective</p>
-						<h2>{campaignDone ? 'Campaign complete' : 'Objective held'}</h2>
+						<h2>{campaignDone ? 'Campaign complete' : 'You held it'}</h2>
 						<p class="hint">
 							{snap.missionName ?? snap.mapName} through wave {snap.objectiveWave}. The field is still
 							open if you want more.
@@ -472,14 +406,14 @@
 			{#if snap?.defeated}
 				<div class="defeat">
 					<div class="defeat-card">
-						<p class="kicker">Relay down</p>
-						<h2>Lost on wave {snap.wave}</h2>
+						<p class="kicker">The lamp went out</p>
+						<h2>You held to wave {snap.wave}</h2>
 						<p class="hint">
 							{snap.kills} kills · {snap.leaks} leaks · best {best}
 						</p>
 						{#if snap.after}
 							<p class="after">
-								Spent {snap.after.spent} scrap
+								Spent {`$${snap.after.spent}`}
 								{#if snap.after.killKinds.length}
 									· {formatParts(snap.after.killKinds)}
 								{/if}
@@ -506,7 +440,7 @@
 			{/if}
 		</div>
 
-		<footer class="tray">
+		<footer class="tray dock">
 			{#if !watch && coop}
 				<div class="coop-tray">
 					<span class="coop-label">P2 · arrows + Enter</span>
@@ -519,8 +453,11 @@
 							session?.setBuild(0, 1);
 						}}
 					>
-						Inspect
-						<small>{p2Bind('cancel')}</small>
+						<span class="shop-head">
+							<span class="shop-key">{p2Bind('cancel')}</span>
+						</span>
+						<ShopPic icon={{ kind: 'inspect' }} />
+						<span class="shop-name">Inspect</span>
 					</button>
 					{#each catalog as item (item.id)}
 						<button
@@ -532,8 +469,12 @@
 								snap?.build2 !== item.id}
 							title={item.blurb}
 						>
-							{p2Bind(buildBind(item.id))} {item.name}
-							<small>{item.cost}</small>
+							<span class="shop-head">
+								<span class="shop-key">{p2Bind(buildBind(item.id))}</span>
+							</span>
+							<ShopPic icon={{ kind: 'build', id: item.id }} />
+							<span class="shop-name">{item.name}</span>
+							<span class="shop-cost">{`$${item.cost}`}</span>
 						</button>
 					{/each}
 					{#each strikeItems as item (item.id)}
@@ -546,13 +487,19 @@
 							disabled={!(hud?.ready ?? false) && snap?.strike2 !== item.id}
 							title={item.blurb}
 						>
-							{p2Bind(`strike${item.id}` as ActionId)} {item.name}
+							<span class="shop-head">
+								<span class="shop-key">{p2Bind(`strike${item.id}` as ActionId)}</span>
+							</span>
+							<ShopPic icon={{ kind: 'strike', id: item.id }} />
+							<span class="shop-name">{item.name}</span>
+							<span class="shop-cost">{`$${item.cost}`}</span>
 						</button>
 					{/each}
 				</div>
 			{/if}
+			<div class="dock-body">
 			{#if !watch}
-			<div class="tray-main">
+			<div class="tray-main dock-arsenal">
 				<div class="build-list">
 					<button
 						class="build"
@@ -563,21 +510,31 @@
 							session?.setBuild(0);
 						}}
 					>
-						Inspect
-						<small>Select · {bindLabel('cancel')}</small>
+						<span class="shop-head">
+							<span class="shop-key">{bindLabel('cancel')}</span>
+						</span>
+						<ShopPic icon={{ kind: 'inspect' }} />
+						<span class="shop-name">Inspect</span>
+						<small>Select</small>
 					</button>
 					{#each catalog as item (item.id)}
 						<button
 							class="build"
 							class:active={snap?.build === item.id}
 							type="button"
+							data-id={item.id}
 							onclick={() => session?.setBuild(item.id)}
 							disabled={((snap?.credits ?? 0) < item.cost || (atGunCap && item.range > 0)) &&
 								snap?.build !== item.id}
 							title={item.blurb}
 						>
-							{bindLabel(buildBind(item.id))} {item.name}
-							<small>{item.cost} · {item.role} · {targets(item)}</small>
+							<span class="shop-head">
+								<span class="shop-key">{bindLabel(buildBind(item.id))}</span>
+							</span>
+							<ShopPic icon={{ kind: 'build', id: item.id }} />
+							<span class="shop-name">{item.name}</span>
+							<span class="shop-cost">{`$${item.cost}`}</span>
+							<small>{item.role} · {targets(item)}</small>
 						</button>
 					{/each}
 				</div>
@@ -592,11 +549,17 @@
 							disabled={!(hud?.ready ?? false) && snap?.strike !== item.id}
 							title={item.blurb}
 						>
-							{bindLabel(`strike${item.id}` as ActionId)} {item.name}
+							<span class="shop-head">
+								<span class="shop-key">{bindLabel(`strike${item.id}` as ActionId)}</span>
+							</span>
+							<ShopPic icon={{ kind: 'strike', id: item.id }} />
+							<span class="shop-name">{item.name}</span>
+							<span class="shop-cost">{`$${item.cost}`}</span>
 							<small>
-								{item.cost}
 								{#if hud && hud.cooldown > 0}
-									· {hud.cooldown.toFixed(1)}s
+									{hud.cooldown.toFixed(1)}s
+								{:else}
+									Ready
 								{/if}
 							</small>
 						</button>
@@ -604,28 +567,143 @@
 				</div>
 			</div>
 			{/if}
-			<p class="hint">
-				{#if watch}
-					Watching a recorded match. Pause and speed still work.
-				{:else if snap?.relocating || (coop && snap?.relocating2)}
-					Click a cell to move · 6 scrap · {bindLabel('cancel')} cancels.
-				{:else if snap?.status === 'fortify' && snap.waveIntel}
-					Next · {snap.waveIntel.script}
-					{#if snap.waveIntel.parts.length}
-						· {formatParts(snap.waveIntel.parts)}
+			<div class="dock-intel">
+				<div class="dock-scores">
+					<div class="dock-credits">
+						<span>Credits</span>
+						<b>{snap != null ? `$${snap.credits}` : '—'}</b>
+						{#if snap && snap.interestBps > 0}
+							<small>
+								{#if snap.interestPaid > 0}+{snap.interestPaid}{:else}{(snap.interestBps / 100).toFixed(0)}% int.{/if}
+							</small>
+						{/if}
+					</div>
+					<div class="dock-score">
+						<span>Score</span>
+						<b>{snap?.kills ?? 0}</b>
+					</div>
+					<div
+						class="dock-stat integrity"
+						class:hurt={relayFrac <= 0.6 && relayFrac > 0.25}
+						class:crit={relayFrac <= 0.25}
+					>
+						<span>Relay</span>
+						<b>{snap?.integrity ?? '—'}{#if snap}<i>/{snap.integrityMax}</i>{/if}</b>
+					</div>
+					<div class="dock-stat wave" class:incoming={snap?.status === 'incoming'}>
+						<span>Wave</span>
+						<b>{snap?.wave ?? '—'}</b>
+					</div>
+					{#if snap}
+						<div class="dock-stat walk">
+							<span>Walk</span>
+							<b>
+								{#if snap.hover?.walkAfter != null && snap.hover.walkAfter !== snap.walk}
+									{@const after = snap.hover.walkAfter}
+									<span class="was">{snap.walk}</span><span
+										class="delta"
+										class:up={after > snap.walk}
+										class:down={after < snap.walk}
+										>→{after}</span
+									>
+								{:else}
+									{snap.walk}
+								{/if}
+							</b>
+						</div>
 					{/if}
-				{:else if coop && snap?.hover2?.reason}
-					P2 · {snap.hover2.reason}
-				{:else if snap?.hover?.reason}
-					{snap.hover.reason}
-				{:else if coop}
-					P1 mouse · drag paints while a gun is selected · P2 arrows + hold Enter to paint.
-					P1 keys win if a bind overlaps. Walls and guns both block the walk.
-				{:else}
-					Drag to paint while a structure is selected · middle-drag pans · click the minimap to look ·
-					wheel/pinch zoom · {bindLabel('viewReset')} resets. Shades walk past guns without Det.
+					<div class="dock-stat best">
+						<span>Best</span>
+						<b>{best || '—'}</b>
+					</div>
+					{#if snap?.turretCap != null}
+						<div class="dock-stat guns">
+							<span>Guns</span>
+							<b>{snap.turretCount}/{snap.turretCap}</b>
+						</div>
+					{/if}
+					{#if snap?.objectiveWave != null}
+						<div class="dock-stat hold" class:cleared={snap.objectiveCleared}>
+							<span>{snap.objectiveCleared ? 'Objective' : 'Hold'}</span>
+							<b>{snap.objectiveCleared ? 'Held' : snap.objectiveWave}</b>
+						</div>
+					{/if}
+				</div>
+				<div class="wave-preview" class:empty={!snap?.waveIntel?.parts.length}>
+					{#if snap?.waveIntel?.parts.length}
+						{#each waveIcons(snap.waveIntel.parts) as unit (unit.key)}
+							<div class="wave-unit" title={unit.name}>
+								<CreepPic kind={unit.kind} />
+							</div>
+						{/each}
+						<div class="wave-script">
+							<strong>{snap.waveIntel.script}</strong>
+							<span>{formatParts(snap.waveIntel.parts)}</span>
+						</div>
+					{:else}
+						<span class="wave-empty">No inbound yet</span>
+					{/if}
+				</div>
+				<p class="dock-eta" class:hot={snap?.status === 'incoming'}>
+					{#if watch}
+						Watching replay
+					{:else if snap?.status === 'fortify'}
+						Wave {snap.wave} · next in {snap.nextWaveIn.toFixed(2)}s
+					{:else if snap?.status === 'incoming'}
+						Wave {snap.wave} · {snap.creepsAlive + snap.creepsRemaining} inbound
+					{:else}
+						Wave {snap?.wave ?? '—'}
+					{/if}
+					{#if coop}
+						· Co-op
+					{/if}
+				</p>
+			</div>
+			<div class="dock-cmd">
+				{#if !watch}
+					<button
+						type="button"
+						class="send-now cmd"
+						class:primary={!!snap?.canCallWave}
+						onclick={() => session?.callWave()}
+						disabled={!snap?.canCallWave}
+					>
+						<span class="cmd-label">Send wave</span>
+						<kbd>{bindLabel('call')}</kbd>
+					</button>
+					<button
+						type="button"
+						class="cmd"
+						onclick={() => session?.repair()}
+						disabled={
+							!snap ||
+							snap.defeated ||
+							snap.integrity >= snap.integrityMax ||
+							snap.credits < snap.repairCost
+						}
+					>
+						<span class="cmd-label">Repair</span>
+						<span class="cmd-cost">{`$${snap?.repairCost ?? '—'}`}</span>
+						<kbd>{bindLabel('repair')}</kbd>
+					</button>
 				{/if}
-			</p>
+				<button type="button" class="cmd" onclick={() => session?.togglePause()}>
+					<span class="cmd-label">{paused ? 'Resume' : 'Pause'}</span>
+					<kbd>{bindLabel('pause')}</kbd>
+				</button>
+				<button type="button" class="cmd" onclick={() => session?.cycleSpeed()}>
+					<span class="cmd-label">Speed {speed}×</span>
+					<kbd>{bindLabel('speed')}</kbd>
+				</button>
+				<button type="button" class="cmd" onclick={() => session?.resetView()}>
+					<span class="cmd-label">View</span>
+					<kbd>{bindLabel('viewReset')}</kbd>
+				</button>
+				<SettingsDock compact />
+				<a class="btn" href="/campaign">Ops</a>
+				<a class="btn" href="/">Briefing</a>
+			</div>
+			</div>
 		</footer>
 	</div>
 {/if}

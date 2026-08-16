@@ -1,9 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { WORKSHOP_STORAGE } from '$lib/game/session';
+	import MenuChrome from '$lib/game/MenuChrome.svelte';
+	import { clusterCells, drawRelay, paintTerrainBitmap } from '$lib/game/sprites';
 	import type { MapDoc, TheaterInfo } from '$lib/game/types';
 
 	type Brush = 'empty' | 'rock' | 'spawn' | 'core';
+
+	const BRUSHES: { id: Brush; label: string; key: string }[] = [
+		{ id: 'empty', label: 'Clear', key: '1' },
+		{ id: 'rock', label: 'Rock', key: '2' },
+		{ id: 'spawn', label: 'Ingress', key: '3' },
+		{ id: 'core', label: 'Relay', key: '4' }
+	];
 
 	let canvas: HTMLCanvasElement | undefined = $state();
 	let theaters = $state<TheaterInfo[]>([]);
@@ -19,13 +28,6 @@
 	let report = $state<string>('Paint a relay and an ingress, then validate.');
 	let ok = $state(false);
 	let painting = false;
-
-	const colors: Record<Brush, string> = {
-		empty: '#2a3322',
-		rock: '#6a6556',
-		spawn: '#c45c3a',
-		core: '#4ee0d8'
-	};
 
 	function blank(nw: number, nh: number, keep?: Brush[][]) {
 		const next: Brush[][] = [];
@@ -84,17 +86,40 @@
 		const scale = Math.min(cssW / w, cssH / h);
 		const ox = (cssW - w * scale) / 2;
 		const oy = (cssH - h * scale) / 2;
-		ctx.fillStyle = '#0c100b';
+		ctx.fillStyle = '#050605';
 		ctx.fillRect(0, 0, cssW, cssH);
+		ctx.imageSmoothingEnabled = false;
 		ctx.translate(ox, oy);
 		ctx.scale(scale, scale);
+		const rocks: [number, number][] = [];
+		const spawns: [number, number][] = [];
+		const cores: [number, number][] = [];
 		for (let y = 0; y < h; y++) {
 			for (let x = 0; x < w; x++) {
-				ctx.fillStyle = colors[cells[y]?.[x] ?? 'empty'];
-				ctx.fillRect(x, y, 1, 1);
+				const tpe = cells[y]?.[x] ?? 'empty';
+				if (tpe === 'rock') rocks.push([x, y]);
+				else if (tpe === 'spawn') spawns.push([x, y]);
+				else if (tpe === 'core') cores.push([x, y]);
 			}
 		}
-		ctx.strokeStyle = 'rgba(196, 210, 160, 0.12)';
+		const bmp = paintTerrainBitmap({ w, h, rocks, spawns, seed, slug }, 1);
+		ctx.drawImage(bmp, 0, 0, w, h);
+		for (const c of clusterCells(cores)) {
+			drawRelay(ctx, c.cx, c.cy, { scale: c.count > 1 ? 1.12 : 0.92, rings: 0 });
+		}
+		ctx.strokeStyle = 'rgba(12, 10, 8, 0.5)';
+		ctx.lineWidth = 0.04;
+		ctx.beginPath();
+		for (let x = 0; x <= w; x++) {
+			ctx.moveTo(x, 0);
+			ctx.lineTo(x, h);
+		}
+		for (let y = 0; y <= h; y++) {
+			ctx.moveTo(0, y);
+			ctx.lineTo(w, y);
+		}
+		ctx.stroke();
+		ctx.strokeStyle = 'rgba(232, 210, 140, 0.28)';
 		ctx.lineWidth = 0.03;
 		ctx.beginPath();
 		for (let x = 0; x <= w; x++) {
@@ -124,7 +149,11 @@
 		const cell = cellAt(ev);
 		if (!cell) return;
 		const next = cells.map((row) => row.slice());
-		next[cell.y][cell.x] = brush;
+		// `cellAt` derives from the w/h inputs, which update on `input` while `cells` is
+		// only rebuilt on `change` — so a typed-but-uncommitted size can index off the end.
+		const row = next[cell.y];
+		if (!row || cell.x < 0 || cell.x >= row.length) return;
+		row[cell.x] = brush;
 		cells = next;
 		ok = false;
 		paint();
@@ -160,6 +189,13 @@
 		cells = blank(w, h);
 		const ro = new ResizeObserver(() => paint());
 		if (canvas) ro.observe(canvas);
+		const onKey = (e: KeyboardEvent) => {
+			const el = e.target as HTMLElement | null;
+			if (el && el.closest('input, textarea, select')) return;
+			const hit = BRUSHES.find((b) => b.key === e.key);
+			if (hit) brush = hit.id;
+		};
+		window.addEventListener('keydown', onKey);
 		void (async () => {
 			const { default: init, WasmGame } = await import('$lib/wasm/otd');
 			await init();
@@ -175,7 +211,10 @@
 				paint();
 			}
 		})();
-		return () => ro.disconnect();
+		return () => {
+			ro.disconnect();
+			window.removeEventListener('keydown', onKey);
+		};
 	});
 
 	async function loadTheater(id: number) {
@@ -195,16 +234,13 @@
 </script>
 
 <main class="workshop">
-	<header class="topbar">
-		<a class="btn" href="/">Briefing</a>
-		<span class="map-chip">Map probe</span>
-		<div class="top-actions">
+	<MenuChrome current="workshop" compact>
+		{#snippet actions()}
 			<button type="button" onclick={() => validate()}>Validate</button>
 			<button type="button" class="primary" onclick={() => play()} disabled={!ok}>Deploy</button>
 			<button type="button" onclick={() => copyJson()}>Copy JSON</button>
-			<a class="btn" href="/pack">Loadout</a>
-		</div>
-	</header>
+		{/snippet}
+	</MenuChrome>
 	<div class="probe">
 		<aside class="probe-side">
 			<label>Name <input bind:value={name} /></label>
@@ -214,11 +250,18 @@
 				<label>W <input type="number" min="8" max="64" bind:value={w} onchange={resizeGrid} /></label>
 				<label>H <input type="number" min="8" max="48" bind:value={h} onchange={resizeGrid} /></label>
 			</div>
-			<p class="hint">Brush</p>
+			<p class="hint">Brush · keys 1–4</p>
 			<div class="brushes">
-				{#each ['empty', 'rock', 'spawn', 'core'] as b}
-					<button type="button" class:active={brush === b} onclick={() => (brush = b as Brush)}>
-						{b}
+				{#each BRUSHES as b (b.id)}
+					<button
+						type="button"
+						class="brush"
+						class:active={brush === b.id}
+						data-brush={b.id}
+						onclick={() => (brush = b.id)}
+					>
+						<kbd>{b.key}</kbd>
+						{b.label}
 					</button>
 				{/each}
 			</div>

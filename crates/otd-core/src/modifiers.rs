@@ -60,7 +60,9 @@ impl Modifier {
 
     pub fn blurb(self) -> &'static str {
         match self {
-            Self::Standard => "Default rules. Invent the maze, cover the sky. Unspent scrap pays interest.",
+            Self::Standard => {
+                "Default rules. Invent the maze, cover the sky. Unspent scrap pays interest."
+            }
             Self::GroundOnly => "No air. The walk is the whole war.",
             Self::Accelerated => "Thin hulls, long gait. They close before barrels settle.",
             Self::RichBounties => "Kills pay extra. Leaks still cost the relay.",
@@ -84,13 +86,13 @@ impl Modifier {
 
     pub fn opening_banner(self) -> &'static str {
         match self {
-            Self::Standard => "FORTIFY THE RELAY",
-            Self::GroundOnly => "GROUND ONLY — NO AIR",
-            Self::Accelerated => "ACCELERATED INGRESS",
-            Self::RichBounties => "RICH BOUNTIES",
-            Self::FixedScrap => "FIXED SCRAP — KILLS PAY NOTHING",
-            Self::Cap10 => "TEN GUNS",
-            Self::Cap20 => "TWENTY GUNS",
+            Self::Standard => "Light the lamps",
+            Self::GroundOnly => "Ground only — the sky is clear",
+            Self::Accelerated => "They come quickly tonight",
+            Self::RichBounties => "Rich pickings",
+            Self::FixedScrap => "Fixed scrap — spend it wisely",
+            Self::Cap10 => "Ten guns, no more",
+            Self::Cap20 => "Twenty guns, no more",
         }
     }
 

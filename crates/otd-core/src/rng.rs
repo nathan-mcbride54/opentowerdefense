@@ -1,4 +1,4 @@
-/// SplitMix64 / xorshift-style generator. Deterministic, no OS entropy.
+/// SplitMix64 generator. Deterministic, no OS entropy.
 #[derive(Clone, Debug)]
 pub struct Rng {
     state: u64,
@@ -6,7 +6,10 @@ pub struct Rng {
 
 impl Rng {
     pub fn new(seed: u64) -> Self {
-        Self { state: seed | 1 }
+        // No `seed | 1` guard: that is an xorshift requirement, and forcing bit 0 here
+        // made every even seed produce a byte-identical match to seed + 1. SplitMix64
+        // advances by the golden-ratio constant before mixing, so state 0 is fine.
+        Self { state: seed }
     }
 
     pub fn next_u64(&mut self) -> u64 {

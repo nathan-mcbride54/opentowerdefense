@@ -99,6 +99,7 @@ pub enum PackError {
     DuplicateGun,
     DuplicateStrike,
     Range,
+    EmptyTray,
 }
 
 impl PackError {
@@ -110,6 +111,7 @@ impl PackError {
             Self::DuplicateGun => "Duplicate gun id in pack".into(),
             Self::DuplicateStrike => "Duplicate strike id in pack".into(),
             Self::Range => "A pack value is out of range".into(),
+            Self::EmptyTray => "A pack must leave at least one buildable enabled".into(),
         }
     }
 }
@@ -127,6 +129,21 @@ struct StrikeMeta {
     name: String,
     blurb: String,
     enabled: bool,
+}
+
+/// Turret stats by `BuildKind as usize`. `Copy`, so it can be mirrored cheaply.
+pub type GunTable = [Option<crate::defs::TurretStats>; 11];
+
+/// `Loadout::scaled` against a bare table. Same values, no borrow of the whole Loadout.
+pub fn scaled_from(
+    table: &GunTable,
+    kind: BuildKind,
+    tier: u8,
+) -> Option<crate::defs::TurretStats> {
+    Some(scale_turret(
+        table.get(kind as usize).copied().flatten()?,
+        tier,
+    ))
 }
 
 #[derive(Clone, Debug)]
@@ -158,7 +175,9 @@ fn mix_str(mut h: u64, s: &str) -> u64 {
 impl Loadout {
     pub fn stock() -> Self {
         let mut guns = [None; 11];
-        let mut gun_meta = [None, None, None, None, None, None, None, None, None, None, None];
+        let mut gun_meta = [
+            None, None, None, None, None, None, None, None, None, None, None,
+        ];
         for s in BUILD_CATALOG {
             let i = s.kind as usize;
             guns[i] = Some(*s);
@@ -216,12 +235,22 @@ impl Loadout {
             seen_s[i] = true;
             apply_strike(&mut load, i, patch)?;
         }
+        // A tray with nothing in it is an unplayable match, not a valid loadout.
+        if load.catalog_items().is_empty() {
+            return Err(PackError::EmptyTray);
+        }
         Ok(load)
     }
 
     pub fn gun(&self, kind: BuildKind) -> Option<crate::defs::TurretStats> {
         let i = kind as usize;
-        if !self.gun_meta.get(i).and_then(|m| m.as_ref()).map(|m| m.enabled).unwrap_or(false) {
+        if !self
+            .gun_meta
+            .get(i)
+            .and_then(|m| m.as_ref())
+            .map(|m| m.enabled)
+            .unwrap_or(false)
+        {
             return None;
         }
         self.guns.get(i).copied().flatten()
@@ -229,6 +258,12 @@ impl Loadout {
 
     pub fn gun_even_disabled(&self, kind: BuildKind) -> Option<crate::defs::TurretStats> {
         self.guns.get(kind as usize).copied().flatten()
+    }
+
+    /// The `Copy` half of the loadout. `tick_towers` reads only this, so mirroring it on
+    /// `Game` avoids cloning the whole `String`-bearing Loadout every tick.
+    pub fn guns_table(&self) -> GunTable {
+        self.guns
     }
 
     pub fn gun_enabled(&self, kind: BuildKind) -> bool {
@@ -594,8 +629,8 @@ pub fn parse_and_resolve(raw: &str) -> Result<(PackDoc, Loadout), PackError> {
     Ok((doc, load))
 }
 
-    #[allow(dead_code)]
-    pub fn resolve_doc(doc: &PackDoc) -> Result<PackDoc, PackError> {
+#[allow(dead_code)]
+pub fn resolve_doc(doc: &PackDoc) -> Result<PackDoc, PackError> {
     let load = Loadout::from_doc(doc)?;
     Ok(load.to_doc(&doc.name, &doc.slug, &doc.blurb))
 }
@@ -642,14 +677,20 @@ pub fn stock_pack_json() -> String {
 }
 
 fn scale_gun(id: u8, cost: f32, range: f32, damage: f32, interval: f32) -> GunPatch {
-    let stock = BUILD_CATALOG.iter().find(|s| s.kind as u8 == id).expect("gun");
+    let stock = BUILD_CATALOG
+        .iter()
+        .find(|s| s.kind as u8 == id)
+        .expect("gun");
     GunPatch {
         id,
         cost: Some(((stock.cost as f32) * cost).round() as i32),
         range: Some(stock.range * range),
         damage: Some(stock.damage * damage),
         fire_interval: Some((stock.fire_interval * interval).max(0.05)),
-        ..GunPatch { id, ..Default::default() }
+        ..GunPatch {
+            id,
+            ..Default::default()
+        }
     }
 }
 
@@ -794,9 +835,6 @@ mod tests {
         };
         let load = Loadout::from_doc(&doc).unwrap();
         assert!(load.gun(BuildKind::Autocannon).is_none());
-        assert!(!load
-            .catalog_items()
-            .iter()
-            .any(|c| c.id == 2));
+        assert!(!load.catalog_items().iter().any(|c| c.id == 2));
     }
 }

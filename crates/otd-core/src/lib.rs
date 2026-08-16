@@ -14,8 +14,8 @@ mod sim;
 mod snapshot;
 
 pub use campaign::{
-    campaign, campaign_json, challenge_by_id, challenges, challenges_json, mission_by_id, Challenge,
-    Mission,
+    campaign, campaign_json, challenge_by_id, challenges, challenges_json, mission_by_id,
+    Challenge, Mission,
 };
 pub use defs::{
     BuildKind, CreepKind, StrikeKind, TargetMode, BUILD_CATALOG, DT, STARTING_CREDITS,

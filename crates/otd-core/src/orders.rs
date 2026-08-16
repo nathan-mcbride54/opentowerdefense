@@ -94,6 +94,12 @@ pub fn replay_hash(file: &ReplayFile) -> String {
         h = mix(h, m.cores.len() as u64);
         h = mix(h, m.spawns.len() as u64);
         h = mix(h, m.rocks.len() as u64);
+        // Cell positions, not just counts: otherwise any two workshop maps with the same
+        // dimensions and the same number of rocks fingerprint identically.
+        for c in m.cores.iter().chain(&m.spawns).chain(&m.rocks) {
+            h = mix(h, c[0] as u32 as u64);
+            h = mix(h, c[1] as u32 as u64);
+        }
     }
     h = mix(h, file.orders.len() as u64);
     for o in &file.orders {

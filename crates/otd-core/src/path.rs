@@ -7,6 +7,10 @@ pub const INF: u32 = u32::MAX / 4;
 pub struct FlowField {
     pub dist: Vec<u32>,
     pub next: Vec<Option<(i32, i32)>>,
+    /// Derived once here rather than per snapshot: both are pure functions of
+    /// (dist, next, grid), and the grid cannot change while this field is alive.
+    max_spawn: u32,
+    paths: Vec<Vec<[i32; 2]>>,
 }
 
 impl FlowField {
@@ -37,7 +41,15 @@ impl FlowField {
             }
         }
 
-        Self { dist, next }
+        let mut field = Self {
+            dist,
+            next,
+            max_spawn: 0,
+            paths: Vec::new(),
+        };
+        field.max_spawn = field.compute_max_spawn_dist(grid);
+        field.paths = field.compute_spawn_paths(grid);
+        field
     }
 
     pub fn dist_at(&self, grid: &Grid, x: i32, y: i32) -> u32 {
@@ -58,7 +70,11 @@ impl FlowField {
         self.dist_at(grid, x, y) < INF
     }
 
-    pub fn max_spawn_dist(&self, grid: &Grid) -> u32 {
+    pub fn max_spawn_dist(&self, _grid: &Grid) -> u32 {
+        self.max_spawn
+    }
+
+    fn compute_max_spawn_dist(&self, grid: &Grid) -> u32 {
         grid.spawns()
             .into_iter()
             .map(|(x, y)| self.dist_at(grid, x, y))
@@ -88,7 +104,12 @@ impl FlowField {
         out
     }
 
-    pub fn spawn_paths(&self, grid: &Grid) -> Vec<Vec<[i32; 2]>> {
+    /// The cached spawn-to-relay walk, borrowed. Computed once in `compute()`.
+    pub fn spawn_paths_ref(&self) -> &[Vec<[i32; 2]>] {
+        &self.paths
+    }
+
+    fn compute_spawn_paths(&self, grid: &Grid) -> Vec<Vec<[i32; 2]>> {
         let spawns = grid.spawns();
         let mut used = vec![false; spawns.len()];
         let mut out = Vec::new();
@@ -156,7 +177,7 @@ mod tests {
     fn spawn_path_walks_to_the_core() {
         let g = hallway();
         let f = FlowField::compute(&g);
-        let paths = f.spawn_paths(&g);
+        let paths = f.spawn_paths_ref();
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0].first().copied(), Some([0, 1]));
         assert_eq!(paths[0].last().copied(), Some([7, 1]));

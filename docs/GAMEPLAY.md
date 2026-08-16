@@ -91,6 +91,8 @@ Guns marked **Det** in the tray can see camo. Autocannon, Howitzer, Inferno, and
 | Twin Cores | Two relays, one integrity pool. Air hunts the nearest |
 | Tri-Gate | Three doors. North, west, east |
 | Oxbow | Rock U opening north. Seal the banks or they go around |
+| Mossfold | Forest enclaves. West ingress, relay in the north-east canopy |
+| Labyrinth | A coil ending south-east. Ground walks every switchback |
 
 ## Modifiers
 

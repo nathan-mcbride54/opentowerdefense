@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import SettingsDock from '$lib/game/SettingsDock.svelte';
-	import type { DailyPick, ModifierInfo, TheaterInfo } from '$lib/game/types';
+	import MapThumb from '$lib/game/MapThumb.svelte';
+	import MenuChrome from '$lib/game/MenuChrome.svelte';
+	import type { DailyPick, MapDoc, ModifierInfo, TheaterInfo } from '$lib/game/types';
 	import { readBestWave, utcDay } from '$lib/game/types';
 
+	const OPS_PICK = 'otd-ops-pick';
 	const keys = [
-		['1–9 / 0', 'Build'],
+		['1–9 / 0', 'Select theater'],
+		['Enter', 'Play selected'],
+		['1–9 / 0', 'Build (in field)'],
 		['Q W E', 'Strikes'],
 		['T / C / V / G / B', 'Target / Helios / Repair / Move / Overcharge'],
 		['U / X', 'Upgrade / sell'],
@@ -17,103 +22,199 @@
 
 	let theaters = $state<TheaterInfo[]>([]);
 	let modifiers = $state<ModifierInfo[]>([]);
+	let docs = $state<Record<number, MapDoc>>({});
 	let daily = $state<DailyPick | null>(null);
 	let mapId = $state(0);
 	let modId = $state(0);
 	let coop = $state(false);
 	let bests = $state<Record<string, number>>({});
+	let ready = $state(false);
+	let now = $state(Date.now());
 
 	const selectedTheater = $derived(theaters.find((t) => t.id === mapId));
 	const selectedMod = $derived(modifiers.find((m) => m.id === modId));
+	const selectedDoc = $derived(docs[mapId]);
 	const playHref = $derived(`/play?map=${mapId}&mod=${modId}${coop ? '&coop=1' : ''}`);
 	const dailyHref = $derived(
 		daily ? `/play?day=${daily.utcDay}${coop ? '&coop=1' : ''}` : `/play?day=${utcDay()}${coop ? '&coop=1' : ''}`
 	);
 	const selectedBest = $derived(bests[`${mapId}-${modId}`] ?? 0);
+	const dailyLeft = $derived.by(() => {
+		const end = (utcDay(now) + 1) * 86_400_000;
+		const ms = Math.max(0, end - now);
+		const h = Math.floor(ms / 3_600_000);
+		const m = Math.floor((ms % 3_600_000) / 60_000);
+		return `${h}h ${String(m).padStart(2, '0')}m`;
+	});
 
-	onMount(async () => {
-		const { default: init, WasmGame } = await import('$lib/wasm/otd');
-		await init();
-		theaters = JSON.parse(WasmGame.theaters()) as TheaterInfo[];
-		modifiers = JSON.parse(WasmGame.modifiers()) as ModifierInfo[];
-		daily = JSON.parse(WasmGame.daily(utcDay())) as DailyPick;
-		const next: Record<string, number> = {};
-		for (const t of theaters) {
-			for (const m of modifiers) {
-				next[`${t.id}-${m.id}`] = readBestWave(t.id, m.id);
-			}
+	function persist() {
+		if (!ready) return;
+		try {
+			localStorage.setItem(OPS_PICK, JSON.stringify({ mapId, modId, coop }));
+		} catch {
+			/* ignore */
 		}
-		bests = next;
+	}
+
+	onMount(() => {
+		const clock = setInterval(() => (now = Date.now()), 15_000);
+		const onKey = (e: KeyboardEvent) => {
+			// target can be document/window, which have no closest().
+			const el = e.target instanceof Element ? e.target : null;
+			if (el && (el.closest('input, textarea, select, [contenteditable]') || el.closest('[data-rebind]')))
+				return;
+			if (e.key >= '1' && e.key <= '9') {
+				const t = theaters[Number(e.key) - 1];
+				if (t) mapId = t.id;
+			} else if (e.key === '0') {
+				const t = theaters[9];
+				if (t) mapId = t.id;
+			}
+			// Enter must not hijack keyboard activation of a focused control — otherwise
+			// tabbing to Settings and pressing Enter deploys into a match instead.
+			if (
+				e.key === 'Enter' &&
+				!e.repeat &&
+				selectedTheater &&
+				!(el instanceof Element && el.closest('button, a, summary, [role="button"], details'))
+			) {
+				window.location.href = `/play?map=${mapId}&mod=${modId}${coop ? '&coop=1' : ''}`;
+			}
+		};
+		window.addEventListener('keydown', onKey);
+		void (async () => {
+			const { default: init, WasmGame } = await import('$lib/wasm/otd');
+			await init();
+			theaters = JSON.parse(WasmGame.theaters()) as TheaterInfo[];
+			modifiers = JSON.parse(WasmGame.modifiers()) as ModifierInfo[];
+			daily = JSON.parse(WasmGame.daily(utcDay())) as DailyPick;
+			const loaded: Record<number, MapDoc> = {};
+			for (const t of theaters) {
+				loaded[t.id] = JSON.parse(WasmGame.theaterDoc(t.id)) as MapDoc;
+			}
+			docs = loaded;
+			const next: Record<string, number> = {};
+			for (const t of theaters) {
+				for (const m of modifiers) {
+					next[`${t.id}-${m.id}`] = readBestWave(t.id, m.id);
+				}
+			}
+			bests = next;
+			try {
+				const raw = localStorage.getItem(OPS_PICK);
+				if (raw) {
+					const pick = JSON.parse(raw) as { mapId?: number; modId?: number; coop?: boolean };
+					if (theaters.some((t) => t.id === pick.mapId)) mapId = pick.mapId as number;
+					if (modifiers.some((m) => m.id === pick.modId)) modId = pick.modId as number;
+					coop = !!pick.coop;
+				}
+			} catch {
+				/* ignore */
+			}
+			ready = true;
+		})();
+		return () => {
+			clearInterval(clock);
+			window.removeEventListener('keydown', onKey);
+		};
+	});
+
+	$effect(() => {
+		mapId;
+		modId;
+		coop;
+		persist();
 	});
 </script>
 
-<main class="brief">
-	<section class="brief-hero">
-		<div>
-			<p class="kicker">Frontier command · 1.0</p>
-			<h1>Open Tower Defense</h1>
-			<p class="lede">
-				Eight theaters, an eight-mission campaign, known-seed challenges, and catalog packs. Paint a
-				map or retune the guns. Local co-op shares one maze and one scrap pile. Waves tell you what
-				is coming. Leftover scrap pays interest. Drag to pan, pinch or scroll to zoom. Rebind every
-				P1 key. The maze is still yours.
-			</p>
-			{#if selectedTheater && selectedMod}
-				<p class="hazard">
-					<strong>{selectedTheater.name}</strong>
-					· {selectedTheater.hazard}
-					<br />
-					<strong>{selectedMod.name}</strong>
-					· {selectedMod.hazard}
-					{#if selectedBest}
-						· best wave {selectedBest}
-					{/if}
-				</p>
+<main class="war-menu">
+	<MenuChrome titleMark="Open" title="Tower Defense" current="maps">
+		{#snippet actions()}
+			{#if daily}
+				<a class="btn daily" href={dailyHref}>Daily</a>
 			{/if}
-			<div class="actions">
-				<a class="btn primary" href={playHref}>Deploy</a>
-				<a class="btn" href="/campaign">Campaign</a>
-				{#if daily}
-					<a class="btn" href={dailyHref}>Today · {daily.mapName}</a>
-				{/if}
-				<a class="btn" href="/workshop">Map probe</a>
-				<a class="btn" href="/pack">Loadout</a>
-				<a class="btn" href="/replay">Replay</a>
-				<label class="coop-opt">
-					<input type="checkbox" bind:checked={coop} />
-					Co-op (local)
-				</label>
+		{/snippet}
+	</MenuChrome>
+	<section class="map-stage">
+		{#if selectedDoc && selectedTheater}
+			<div class="map-hero map-stage-hero">
+				<MapThumb map={selectedDoc} large />
+				<ul class="map-legend">
+					<li><i class="lg-core"></i>Relay</li>
+					<li><i class="lg-spawn"></i>Ingress</li>
+					<li><i class="lg-rock"></i>Rock</li>
+				</ul>
+				<div class="map-hero-hud">
+					<div>
+						<p class="kicker">Theater {String(selectedTheater.id + 1).padStart(2, '0')}</p>
+						<h2>{selectedTheater.name}</h2>
+						<p>{selectedTheater.hazard}</p>
+						<ul class="map-stats">
+							<li><b>{selectedDoc.w}×{selectedDoc.h}</b> grid</li>
+							<li><b>{selectedDoc.cores.length}</b> relay</li>
+							<li><b>{selectedDoc.spawns.length}</b> ingress</li>
+							<li><b>{selectedDoc.rocks.length}</b> rock</li>
+							{#if selectedMod}
+								<li><b>{selectedMod.name}</b></li>
+							{/if}
+							{#if selectedBest}
+								<li><b>wave {selectedBest}</b> best</li>
+							{/if}
+						</ul>
+					</div>
+					<div class="map-hero-actions">
+						<a class="btn primary deploy" href={playHref}>Play</a>
+						<label class="coop-opt">
+							<input type="checkbox" bind:checked={coop} />
+							Co-op
+						</label>
+					</div>
+				</div>
 			</div>
-		</div>
-		<div class="hero-foot">
-			<SettingsDock compact />
-			<p class="hint">MIT licensed. Simulation in Rust/Wasm. Command post in SvelteKit.</p>
-		</div>
+		{:else}
+			<p class="hint">Linking theaters…</p>
+		{/if}
 	</section>
-	<aside class="brief-side">
+	<aside class="menu-side">
 		<div>
-			<h2>Theaters</h2>
+			<h2>Select map</h2>
+			<p class="hint side-hint">Keys 1–9 and 0 pick a theater. Enter deploys.</p>
 			{#if theaters.length === 0}
 				<p class="hint">Linking theaters…</p>
 			{:else}
 				<div class="theater-list">
-					{#each theaters as t (t.id)}
+					{#each theaters as t, i (t.id)}
 						<button
 							type="button"
 							class="theater"
 							class:selected={t.id === mapId}
 							onclick={() => (mapId = t.id)}
 						>
-							<strong>{t.name}</strong>
-							<span>{t.blurb}</span>
-							<small>{t.hazard}</small>
+							{#if docs[t.id]}
+								<MapThumb map={docs[t.id]} />
+							{/if}
+							{#if bests[`${t.id}-${modId}`]}
+								<span class="best-chip">W{bests[`${t.id}-${modId}`]}</span>
+							{/if}
+							<span class="theater-copy">
+								<!-- One number per card, reading 1–10 in list order. The key that
+								     selects it is 0 for the tenth, so that lives in the tooltip
+								     rather than as a second, conflicting number on the card. -->
+								<span class="theater-no" title="Press {i === 9 ? 0 : i + 1}">
+									{String(i + 1).padStart(2, '0')}
+								</span>
+								<strong>{t.name}</strong>
+								{#if docs[t.id]}
+									<small>{docs[t.id].w}×{docs[t.id].h}</small>
+								{/if}
+							</span>
 						</button>
 					{/each}
 				</div>
 			{/if}
 		</div>
 		<div>
-			<h2>Modifiers</h2>
+			<h2>Game mode</h2>
 			<div class="mod-list">
 				{#each modifiers as m (m.id)}
 					<button
@@ -136,34 +237,35 @@
 				<p class="kicker">Today’s assignment</p>
 				<strong>{daily.mapName} · {daily.modifierName}</strong>
 				<span>{daily.mapHazard} {daily.modifierHazard}</span>
-				<a class="btn" href={dailyHref}>Run daily</a>
+				<span class="daily-clock">Rotates in {dailyLeft}</span>
+				<a class="btn daily" href={dailyHref}>Run daily</a>
 			</div>
 		{/if}
-		<div>
-			<h2>Standing orders</h2>
-			<ol>
-				<li>Barricades and turrets both block ground traffic. Stretch the walk.</li>
-				<li>Twin Cores: air still hunts the nearest relay. You cannot abandon the sky.</li>
-				<li>Fixed scrap and gun caps are vows. Sell-back is the only refund.</li>
-				<li>Workshop maps are JSON. Validate before you deploy. Copy a replay from pause.</li>
-				<li>Campaign missions unlock in order. Challenges are public seeds with a verify hash.</li>
-				<li>Loadout packs retune the catalog. The tick does not change.</li>
-				<li>Local co-op: one sim, shared scrap. P2 is arrows + Enter and a second keymap.</li>
-				<li>Copy a replay from pause. Verify or watch it on the replay desk.</li>
-				<li>The director names the next wave. Swarm wants splash. Split wants mites dead in the fold.</li>
-				<li>Medics heal the column. Interest pays on leftover scrap when the field clears.</li>
-				<li>Shades ignore guns without Det. Pulse, Arc, Helios, and strikes can see them. Drag to paint walls.</li>
-				<li>The Walk meter is the maze. Move a structure with G. Flickers hop the path — length is not a win by itself.</li>
-			</ol>
-		</div>
-		<div>
-			<h2>Hotkeys</h2>
-			<div class="keys">
-				{#each keys as [k, v]}
-					<kbd>{k}</kbd>
-					<span>{v}</span>
-				{/each}
-			</div>
-		</div>
 	</aside>
+	<footer class="menu-foot">
+		<SettingsDock compact />
+		<details class="orders">
+			<summary>Standing orders / hotkeys</summary>
+			<div class="orders-body">
+				<ol>
+					<li>Barricades and turrets both block ground traffic. Stretch the walk.</li>
+					<li>Twin Cores: air still hunts the nearest relay. You cannot abandon the sky.</li>
+					<li>Fixed scrap and gun caps are vows. Sell-back is the only refund.</li>
+					<li>Workshop maps are JSON. Validate before you deploy. Copy a replay from pause.</li>
+					<li>Campaign missions unlock in order. Challenges are public seeds with a verify hash.</li>
+					<li>The director names the next wave. Swarm wants splash. Split wants mites dead in the fold.</li>
+					<li>Medics heal the column. Interest pays on leftover scrap when the field clears.</li>
+					<li>Shades ignore guns without Det. Pulse, Arc, Helios, and strikes can see them.</li>
+					<li>The Walk meter is the maze. Move a structure with G. Flickers hop the path.</li>
+				</ol>
+				<div class="keys">
+					{#each keys as [k, v]}
+						<kbd>{k}</kbd>
+						<span>{v}</span>
+					{/each}
+				</div>
+			</div>
+		</details>
+		<p class="hint">MIT licensed.</p>
+	</footer>
 </main>

@@ -12,3 +12,5 @@ rust-version = "1.80"
 lto = true
 codegen-units = 1
 opt-level = 3
+# Nothing in the workspace uses catch_unwind, so unwind tables are dead weight.
+panic = "abort"

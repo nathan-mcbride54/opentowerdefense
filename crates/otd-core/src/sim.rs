@@ -1,10 +1,10 @@
 use crate::defs::{
     apply_armor, armor_pen, creep_stats, strike_pen, tier_name, wave_bounty_mul, wave_hp_mul,
-    wave_speed_mul, BuildKind, CreepKind, FireMode, StrikeKind, TargetMode, DT, FIRST_WAVE_DELAY,
-    FLICKER_PERIOD, FLICKER_STEPS, HELIOS_CONVERT_COST, MAX_TIER, MEDIC_HEAL_PER_SEC,
-    MEDIC_HEAL_RADIUS, MOVE_COST, OVERCHARGE_COST, OVERCHARGE_FIRE_MUL, OVERCHARGE_TTL,
-    REPAIR_COST, SELL_RATIO, STARTING_INTEGRITY, WAVE_DELAY, COLOSSUS_ROAR_PERIOD,
-    COLOSSUS_ROAR_RADIUS, COLOSSUS_STUN,
+    wave_speed_mul, BuildKind, CreepKind, FireMode, StrikeKind, TargetMode, COLOSSUS_ROAR_PERIOD,
+    COLOSSUS_ROAR_RADIUS, COLOSSUS_STUN, DT, FIRST_WAVE_DELAY, FLICKER_PERIOD, FLICKER_STEPS,
+    HELIOS_CONVERT_COST, MAX_TIER, MEDIC_HEAL_PER_SEC, MEDIC_HEAL_RADIUS, MOVE_COST,
+    OVERCHARGE_COST, OVERCHARGE_FIRE_MUL, OVERCHARGE_TTL, REPAIR_COST, SELL_RATIO,
+    STARTING_INTEGRITY, WAVE_DELAY,
 };
 use crate::director::{WavePlan, WaveScript};
 use crate::geom::Vec2;
@@ -46,7 +46,7 @@ impl PlaceError {
             Self::Occupied => "Can't build there",
             Self::CantAfford => "Not enough scrap",
             Self::BlocksPath => "That would cut off the relay",
-            Self::TrapsCreeps => "That would pocket living hostiles",
+            Self::TrapsCreeps => "That would trap someone with nowhere to walk",
             Self::NotATurret => "Nothing to upgrade",
             Self::MaxTier => "Already maxed",
             Self::NotHelios => "Only Helios converts",
@@ -178,12 +178,20 @@ fn slot(player: u8) -> usize {
 pub struct Game {
     grid: Grid,
     flow: FlowField,
+    /// Relay centroids, cached at construction. Terrain never changes during a match, and
+    /// `Grid::nearest_core` was rescanning all cells + allocating a HashSet per call —
+    /// once per flying creep per tower inside `acquire`.
+    core_clusters: Vec<Vec2>,
+    core_mid: Vec2,
+    /// Copy mirror of `loadout.guns`, refreshed on pack apply. `tick_towers` reads only
+    /// this, so it no longer clones the String-bearing Loadout 60x/second.
+    guns_hot: crate::pack::GunTable,
     rng: Rng,
     towers: Vec<Tower>,
     creeps: Vec<Creep>,
     projectiles: Vec<Projectile>,
-    fx: Vec<Fx>,
-    beams: Vec<Beam>,
+    fx: VecDeque<Fx>,
+    beams: VecDeque<Beam>,
     spawn_q: VecDeque<SpawnOrder>,
     spawn_cd: f32,
     next_id: u32,
@@ -232,10 +240,22 @@ impl Game {
     }
 
     pub fn start(map_id: u8, modifier: Modifier, seed_override: Option<u64>) -> Self {
-        let (grid, name, seed) = crate::maps::theater_by_id(map_id)
-            .or_else(|| crate::maps::theater_by_id(0))
-            .expect("kilo theater");
-        Self::with_modifier(grid, name, seed_override.unwrap_or(seed), map_id, modifier)
+        // Resolve the id and the theater together. Storing an unresolved id while playing
+        // the fallback theater desynchronises best-wave keys and the replay bundle — and
+        // id 255 is WORKSHOP_MAP_ID, so it would emit a forged workshop replay.
+        let resolved = if crate::maps::theater_by_id(map_id).is_some() {
+            map_id
+        } else {
+            0
+        };
+        let (grid, name, seed) = crate::maps::theater_by_id(resolved).expect("kilo theater");
+        Self::with_modifier(
+            grid,
+            name,
+            seed_override.unwrap_or(seed),
+            resolved,
+            modifier,
+        )
     }
 
     pub fn daily(utc_day: u32) -> Self {
@@ -253,7 +273,14 @@ impl Game {
         g.hold_until = Some(m.hold_until_wave);
         g.mission_id = Some(m.id);
         g.mission_name = Some(m.name.clone());
-        g.banner = Some((format!("{}  ·  {}", m.name.to_uppercase(), m.objective.to_uppercase()), 4.2));
+        g.banner = Some((
+            format!(
+                "{}  ·  {}",
+                m.name.to_uppercase(),
+                m.objective.to_uppercase()
+            ),
+            4.2,
+        ));
         Some(g)
     }
 
@@ -271,7 +298,13 @@ impl Game {
         let name = doc.name.clone();
         let seed = doc.seed;
         let grid = crate::mapdoc::validate_map(&doc)?;
-        Ok(Self::with_modifier(grid, &name, seed, WORKSHOP_MAP_ID, modifier))
+        Ok(Self::with_modifier(
+            grid,
+            &name,
+            seed,
+            WORKSHOP_MAP_ID,
+            modifier,
+        ))
     }
 
     pub fn from_map_json(raw: &str, modifier: Modifier) -> Result<Self, MapError> {
@@ -307,11 +340,8 @@ impl Game {
 
     pub fn apply_pack(&mut self, doc: PackDoc) -> Result<(), PackError> {
         let loadout = Loadout::from_doc(&doc)?;
-        self.pack = if loadout.is_stock() {
-            None
-        } else {
-            Some(doc)
-        };
+        self.pack = if loadout.is_stock() { None } else { Some(doc) };
+        self.guns_hot = loadout.guns_table();
         self.loadout = loadout;
         Ok(())
     }
@@ -342,15 +372,22 @@ impl Game {
     ) -> Self {
         let flow = FlowField::compute(&grid);
         let rules = modifier.rules();
+        let core_clusters = grid.core_clusters();
+        let core_mid = grid.core_center();
+        let stock = Loadout::stock();
+        let guns_hot = stock.guns_table();
         let mut game = Self {
             grid,
             flow,
+            core_clusters,
+            core_mid,
+            guns_hot,
             rng: Rng::new(seed),
             towers: Vec::new(),
             creeps: Vec::new(),
             projectiles: Vec::new(),
-            fx: Vec::new(),
-            beams: Vec::new(),
+            fx: VecDeque::new(),
+            beams: VecDeque::new(),
             spawn_q: VecDeque::new(),
             spawn_cd: 0.0,
             next_id: 1,
@@ -381,7 +418,7 @@ impl Game {
             mission_id: None,
             challenge_id: None,
             mission_name: None,
-            loadout: Loadout::stock(),
+            loadout: stock,
             pack: None,
             spent: 0,
             last_interest: 0,
@@ -418,6 +455,12 @@ impl Game {
             h: self.grid.h,
             id: self.map_id,
             name: self.map_name.clone(),
+            slug: crate::maps::theaters()
+                .into_iter()
+                .find(|t| t.id == self.map_id)
+                .map(|t| t.slug.to_string())
+                .unwrap_or_else(|| "workshop".to_string()),
+            seed: self.seed,
             core: self.grid.cores().into_iter().map(|(x, y)| [x, y]).collect(),
             spawns: self
                 .grid
@@ -816,9 +859,7 @@ impl Game {
             self.toast("Move cancelled");
             return Ok(());
         }
-        let id = self.hands[i]
-            .selected
-            .ok_or(PlaceError::NothingToMove)?;
+        let id = self.hands[i].selected.ok_or(PlaceError::NothingToMove)?;
         if !self.towers.iter().any(|t| t.id == id) {
             return Err(PlaceError::NothingToMove);
         }
@@ -1036,9 +1077,9 @@ impl Game {
 
     fn push_fx(&mut self, kind: &'static str, pos: Vec2, ttl: f32, mag: f32, heading: f32) {
         if self.fx.len() > 180 {
-            self.fx.remove(0);
+            self.fx.pop_front();
         }
-        self.fx.push(Fx {
+        self.fx.push_back(Fx {
             kind,
             pos,
             ttl,
@@ -1050,9 +1091,9 @@ impl Game {
 
     fn push_beam(&mut self, a: Vec2, b: Vec2, kind: BuildKind, ttl: f32) {
         if self.beams.len() > 80 {
-            self.beams.remove(0);
+            self.beams.pop_front();
         }
-        self.beams.push(Beam {
+        self.beams.push_back(Beam {
             a,
             b,
             kind,
@@ -1072,7 +1113,11 @@ impl Game {
             0.35
         };
         self.phase = Phase::Incoming;
-        let banner = format!("WAVE {}  ·  {}", self.wave, plan.script.label().to_uppercase());
+        let banner = format!(
+            "WAVE {}  ·  {}",
+            self.wave,
+            plan.script.label().to_uppercase()
+        );
         self.banner = Some((banner, 2.4));
     }
 
@@ -1125,7 +1170,7 @@ impl Game {
         if self.integrity <= 0 {
             self.integrity = 0;
             self.phase = Phase::Defeat;
-            self.banner = Some(("RELAY DOWN".into(), 8.0));
+            self.banner = Some(("The relay went dark".into(), 8.0));
         } else if matches!(self.phase, Phase::Incoming)
             && self.spawn_q.is_empty()
             && self.creeps.is_empty()
@@ -1196,7 +1241,7 @@ impl Game {
         } else {
             0
         };
-        let weave = self.rng.range_f32(0.0, 6.28);
+        let weave = self.rng.range_f32(0.0, std::f32::consts::TAU);
         let blink_cd = if order.kind == CreepKind::Flicker {
             self.rng.range_f32(0.4, FLICKER_PERIOD)
         } else {
@@ -1235,6 +1280,11 @@ impl Game {
     fn tick_creeps(&mut self) {
         let mut leaks: Vec<usize> = Vec::new();
         for (i, c) in self.creeps.iter_mut().enumerate() {
+            // A creep killed out of step (a strike lands between movement passes) must not
+            // move or leak this tick — reap_creeps will score it as a kill instead.
+            if c.hp <= 0.0 {
+                continue;
+            }
             if c.slow_ttl > 0.0 {
                 c.slow_ttl -= DT;
                 if c.slow_ttl <= 0.0 {
@@ -1245,7 +1295,7 @@ impl Game {
             let spd = c.speed * c.slow_mul;
             let prev = c.pos;
             if c.flying {
-                let core = self.grid.nearest_core(c.pos);
+                let core = Grid::nearest_of(&self.core_clusters, self.core_mid, c.pos);
                 let to = core.sub(c.pos);
                 let dir = to.norm();
                 let weave = dir.perp().mul((self.time * 3.2 + c.weave).sin() * 0.12);
@@ -1269,7 +1319,11 @@ impl Game {
                         c.vel = to.norm().mul(spd);
                         c.pos = c.pos.add(c.vel.mul(DT));
                     }
-                } else if c.pos.dist(self.grid.nearest_core(c.pos)) < 0.6 {
+                } else if c
+                    .pos
+                    .dist(Grid::nearest_of(&self.core_clusters, self.core_mid, c.pos))
+                    < 0.6
+                {
                     leaks.push(i);
                 }
             }
@@ -1358,11 +1412,12 @@ impl Game {
             detects: bool,
             homing: bool,
             muzzle: Vec2,
+            ttl: f32,
         }
 
         let mut shots: Vec<Shot> = Vec::new();
         let mut instants: Vec<InstantFire> = Vec::new();
-        let loadout = self.loadout.clone();
+        let guns = self.guns_hot;
 
         for t in &mut self.towers {
             t.stun_ttl = (t.stun_ttl - DT).max(0.0);
@@ -1371,7 +1426,7 @@ impl Game {
             if !t.kind.is_turret() {
                 continue;
             }
-            let Some(mut stats) = loadout.scaled(t.kind, t.tier) else {
+            let Some(mut stats) = crate::pack::scaled_from(&guns, t.kind, t.tier) else {
                 continue;
             };
             if t.kind == BuildKind::Helios {
@@ -1403,6 +1458,8 @@ impl Game {
                     &self.creeps,
                     &self.flow,
                     &self.grid,
+                    &self.core_clusters,
+                    self.core_mid,
                     origin,
                     &stats,
                     t.target_mode,
@@ -1451,6 +1508,9 @@ impl Game {
                             detects: stats.kind.detects(),
                             homing: stats.homing,
                             muzzle: origin.add(dir.mul(0.38)),
+                            // Live just past the gun's own reach. A flat 1.8s let a missed
+                            // splash shell detonate at full damage several tiles outside range.
+                            ttl: ((stats.range * 1.35) / stats.proj_speed.max(1.0)).clamp(0.1, 1.8),
                         });
                     }
                 }
@@ -1488,7 +1548,7 @@ impl Game {
                 hits_air: s.hits_air,
                 detects: s.detects,
                 kind: s.kind,
-                ttl: 1.8,
+                ttl: s.ttl,
                 homing: s.homing,
             });
             self.push_fx("muzzle", s.muzzle, 0.08, 0.7, 0.0);
@@ -1602,7 +1662,9 @@ impl Game {
                     p.target = self
                         .creeps
                         .iter()
-                        .filter(|c| c.hp > 0.0 && hit_filter(c, p.hits_ground, p.hits_air, p.detects))
+                        .filter(|c| {
+                            c.hp > 0.0 && hit_filter(c, p.hits_ground, p.hits_air, p.detects)
+                        })
                         .min_by(|a, b| {
                             a.pos
                                 .dist(p.pos)
@@ -1667,7 +1729,9 @@ impl Game {
             };
             let mut taken_total = 0.0;
             for c in &mut self.creeps {
-                if c.hp <= 0.0 || !hit_filter(c, impact.hits_ground, impact.hits_air, impact.detects) {
+                if c.hp <= 0.0
+                    || !hit_filter(c, impact.hits_ground, impact.hits_air, impact.detects)
+                {
                     continue;
                 }
                 if c.pos.dist(impact.pos) > radius + c.radius {
@@ -1746,7 +1810,7 @@ impl Game {
                 camo: false,
                 radius: stats.radius * 0.78,
                 heading: parent.heading,
-                weave: s.rng.range_f32(0.0, 6.28),
+                weave: s.rng.range_f32(0.0, std::f32::consts::TAU),
                 slow_mul: 1.0,
                 slow_ttl: 0.0,
                 split_gen: 1,
@@ -1872,7 +1936,7 @@ impl Game {
                 .fx
                 .iter()
                 .map(|f| FxView {
-                    kind: f.kind.to_string(),
+                    kind: f.kind,
                     x: f.pos.x,
                     y: f.pos.y,
                     life: (f.ttl / f.max).clamp(0.0, 1.0),
@@ -1914,10 +1978,13 @@ impl Game {
             after: self.after_action(),
             interest_paid: self.last_interest,
             interest_bps: self.rules().interest_bps,
+            move_cost: MOVE_COST,
+            repair_cost: REPAIR_COST,
+            overcharge_cost: OVERCHARGE_COST,
             walk: self.flow.max_spawn_dist(&self.grid),
             relocating: self.hands[0].lift.is_some(),
             relocating2: self.hands[1].lift.is_some(),
-            walk_paths: self.flow.spawn_paths(&self.grid),
+            walk_paths: self.flow.spawn_paths_ref().to_vec(),
         }
     }
 
@@ -1941,7 +2008,7 @@ impl Game {
                 damage: t.damage_dealt,
             })
             .collect();
-        guns.sort_by(|a, b| b.kills.cmp(&a.kills));
+        guns.sort_by_key(|g| std::cmp::Reverse(g.kills));
         AfterAction {
             spent: self.spent,
             kills: self.kills,
@@ -2055,6 +2122,11 @@ impl Game {
     }
 
     fn preview_place(&self, x: i32, y: i32, kind: BuildKind) -> Result<u32, PlaceError> {
+        // Mirror place_for's first guard, or the hover reports a legal placement on a
+        // field the engine will refuse.
+        if matches!(self.phase, Phase::Defeat) {
+            return Err(PlaceError::Occupied);
+        }
         if !kind.is_structure() {
             return Err(PlaceError::Occupied);
         }
@@ -2107,6 +2179,9 @@ impl Game {
     }
 
     fn preview_relocate(&self, id: u32, x: i32, y: i32) -> Result<u32, PlaceError> {
+        if matches!(self.phase, Phase::Defeat) {
+            return Err(PlaceError::Occupied);
+        }
         let t = self
             .towers
             .iter()
@@ -2228,7 +2303,12 @@ impl Game {
                 Some(self.map_id)
             },
             map: if self.map_id == WORKSHOP_MAP_ID {
-                Some(grid_to_doc(&self.grid, &self.map_name, "workshop", self.seed))
+                Some(grid_to_doc(
+                    &self.grid,
+                    &self.map_name,
+                    "workshop",
+                    self.seed,
+                ))
             } else {
                 None
             },
@@ -2371,11 +2451,19 @@ fn hit_filter(c: &Creep, hits_ground: bool, hits_air: bool, detects: bool) -> bo
     (c.flying && hits_air) || (!c.flying && hits_ground)
 }
 
+/// The creep carries one slow: the strongest currently active, with its own expiry.
+///
+/// A weaker slow must not refresh a stronger one's timer — otherwise a Pulse Array
+/// ticking every 0.78s keeps an Overload's 0.42 multiplier alive indefinitely and the
+/// creep never recovers. A weaker slow is simply ignored while a stronger one holds;
+/// once that expires, `tick_creeps` resets `slow_mul` to 1.0 and the weaker slow lands.
 fn apply_slow(c: &mut Creep, mul: f32, dur: f32) {
     if mul < c.slow_mul {
         c.slow_mul = mul;
+        c.slow_ttl = dur;
+    } else if mul == c.slow_mul {
+        c.slow_ttl = c.slow_ttl.max(dur);
     }
-    c.slow_ttl = c.slow_ttl.max(dur);
 }
 
 fn hurt(c: &mut Creep, amount: f32, owner: Option<u32>) {
@@ -2408,10 +2496,13 @@ fn dist_to_segment(p: Vec2, a: Vec2, b: Vec2) -> f32 {
     p.dist(a.add(ab.mul(t)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn acquire(
     creeps: &[Creep],
     flow: &FlowField,
     grid: &Grid,
+    cores: &[Vec2],
+    core_mid: Vec2,
     origin: Vec2,
     stats: &crate::defs::TurretStats,
     mode: TargetMode,
@@ -2425,7 +2516,7 @@ fn acquire(
             continue;
         }
         let first = if c.flying {
-            c.pos.dist(grid.nearest_core(c.pos))
+            c.pos.dist(Grid::nearest_of(cores, core_mid, c.pos))
         } else {
             let (x, y) = Grid::world_to_cell(c.pos.x, c.pos.y);
             flow.dist_at(grid, x, y) as f32 + c.pos.dist(Grid::cell_center(x, y)) * 0.01
@@ -2748,6 +2839,8 @@ mod tests {
             &g.creeps,
             &g.flow,
             &g.grid,
+            &g.core_clusters,
+            g.core_mid,
             Grid::cell_center(5, 2),
             &stats,
             TargetMode::Last,
@@ -2938,8 +3031,20 @@ mod tests {
         g.click_p(1, 4, 3);
         assert_eq!(g.towers.len(), 2);
         assert_eq!(g.credits, 200 - 8 - 50);
-        assert_eq!(g.hands[0].selected, g.towers.iter().find(|t| t.kind == BuildKind::Barricade).map(|t| t.id));
-        assert_eq!(g.hands[1].selected, g.towers.iter().find(|t| t.kind == BuildKind::Autocannon).map(|t| t.id));
+        assert_eq!(
+            g.hands[0].selected,
+            g.towers
+                .iter()
+                .find(|t| t.kind == BuildKind::Barricade)
+                .map(|t| t.id)
+        );
+        assert_eq!(
+            g.hands[1].selected,
+            g.towers
+                .iter()
+                .find(|t| t.kind == BuildKind::Autocannon)
+                .map(|t| t.id)
+        );
         let bundle = g.replay_bundle();
         assert!(bundle.orders.iter().any(|o| o.player == 1));
         let report = crate::verify_replay(bundle);
@@ -2958,7 +3063,10 @@ mod tests {
         g.creeps[0].hp = 0.0;
         g.reap_creeps();
         assert_eq!(g.creeps.len(), 2);
-        assert!(g.creeps.iter().all(|c| c.kind == CreepKind::Mite && c.split_gen == 1));
+        assert!(g
+            .creeps
+            .iter()
+            .all(|c| c.kind == CreepKind::Mite && c.split_gen == 1));
         g.creeps[0].hp = 0.0;
         g.creeps[1].hp = 0.0;
         g.reap_creeps();
@@ -3069,7 +3177,10 @@ mod tests {
             g.step();
         }
         assert_eq!(g.kills, 0);
-        assert!(g.creeps.iter().any(|c| c.kind == CreepKind::Shade && c.hp == hp));
+        assert!(g
+            .creeps
+            .iter()
+            .any(|c| c.kind == CreepKind::Shade && c.hp == hp));
     }
 
     #[test]
@@ -3253,7 +3364,11 @@ mod tests {
             .iter()
             .any(|o| matches!(o.op, OrderOp::Overcharge)));
         g.place(4, 1, BuildKind::Barricade).unwrap();
-        g.hands[0].selected = g.towers.iter().find(|t| t.kind == BuildKind::Barricade).map(|t| t.id);
+        g.hands[0].selected = g
+            .towers
+            .iter()
+            .find(|t| t.kind == BuildKind::Barricade)
+            .map(|t| t.id);
         assert_eq!(g.overcharge().unwrap_err(), PlaceError::NotATurret);
     }
 

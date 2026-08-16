@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { PACK_STORAGE } from '$lib/game/session';
+	import MenuChrome from '$lib/game/MenuChrome.svelte';
 	import type { FireMode, PackDoc } from '$lib/game/types';
 
 	const fires: FireMode[] = ['shell', 'cone', 'line', 'pulse', 'beam'];
@@ -22,9 +23,10 @@
 		jsonText = JSON.stringify(pack, null, 2);
 	}
 
-	function loadResolved(next: PackDoc) {
+	/** `keepOk` is set by validate(), whose own resolve pass must not clear the gate it just opened. */
+	function loadResolved(next: PackDoc, keepOk = false) {
 		pack = next;
-		ok = false;
+		if (!keepOk) ok = false;
 		syncJson();
 	}
 
@@ -34,7 +36,7 @@
 		return WasmGame;
 	}
 
-	async function applyRaw(raw: string) {
+	async function applyRaw(raw: string, keepOk = false) {
 		const WasmGame = await wasm();
 		const r = JSON.parse(WasmGame.resolvePack(raw)) as {
 			ok: boolean;
@@ -46,8 +48,9 @@
 			report = r.error || 'Rejected.';
 			return;
 		}
-		loadResolved(r.pack);
-		report = `${r.pack.name} resolved. ${r.pack.guns.length} guns, ${r.pack.strikes.length} strikes.`;
+		loadResolved(r.pack, keepOk);
+		if (!keepOk)
+			report = `${r.pack.name} resolved. ${r.pack.guns.length} guns, ${r.pack.strikes.length} strikes.`;
 	}
 
 	async function loadPreset(p: PackDoc) {
@@ -66,7 +69,7 @@
 		report = r.ok
 			? `Ready. ${r.guns} guns in tray${r.stock ? ' · stock numbers' : ''}.`
 			: r.error || 'Rejected.';
-		if (r.ok) await applyRaw(JSON.stringify(pack));
+		if (r.ok) await applyRaw(JSON.stringify(pack), true);
 	}
 
 	function play() {
@@ -99,16 +102,13 @@
 </script>
 
 <main class="workshop">
-	<header class="topbar">
-		<a class="btn" href="/">Briefing</a>
-		<span class="map-chip">Loadout probe</span>
-		<div class="top-actions">
+	<MenuChrome current="pack" compact>
+		{#snippet actions()}
 			<button type="button" onclick={() => validate()}>Validate</button>
 			<button type="button" class="primary" onclick={() => play()} disabled={!ok}>Deploy</button>
 			<button type="button" onclick={() => copyJson()}>Copy JSON</button>
-			<a class="btn" href="/workshop">Map probe</a>
-		</div>
-	</header>
+		{/snippet}
+	</MenuChrome>
 	<div class="probe pack-probe">
 		<aside class="probe-side">
 			<label>Name <input bind:value={pack.name} oninput={() => (ok = false)} /></label>
@@ -120,6 +120,10 @@
 					<button type="button" onclick={() => loadPreset(p)}>{p.name}</button>
 				{/each}
 			</div>
+			<p class="hint">
+				{pack.guns.filter((g) => g.enabled !== false).length} guns live ·
+				{pack.strikes.filter((s) => s.enabled !== false).length} strikes live
+			</p>
 			<p class="hint">{report}</p>
 			<p class="hint">
 				Numbers only. Fire modes already exist in the tick. You cannot add an eleventh gun. Disabled
@@ -135,6 +139,7 @@
 			{#if !ready}
 				<p class="hint">Linking catalog…</p>
 			{:else}
+				<h2 class="probe-h">Guns</h2>
 				<table class="pack-table">
 					<thead>
 						<tr>
@@ -267,6 +272,7 @@
 						{/each}
 					</tbody>
 				</table>
+				<h2 class="probe-h">Strikes</h2>
 				<table class="pack-table">
 					<thead>
 						<tr>

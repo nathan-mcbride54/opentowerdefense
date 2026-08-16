@@ -1,15 +1,20 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import SettingsDock from '$lib/game/SettingsDock.svelte';
-	import type { ChallengeInfo, MissionInfo } from '$lib/game/types';
+	import MapThumb from '$lib/game/MapThumb.svelte';
+	import MenuChrome from '$lib/game/MenuChrome.svelte';
+	import type { ChallengeInfo, MapDoc, MissionInfo } from '$lib/game/types';
 	import { missionUnlocked, readCampaignCleared } from '$lib/game/types';
 
 	let missions = $state<MissionInfo[]>([]);
 	let challenges = $state<ChallengeInfo[]>([]);
+	let docs = $state<Record<number, MapDoc>>({});
 	let cleared = $state<number[]>([]);
 	let coop = $state(false);
 
 	const complete = $derived(missions.length > 0 && missions.every((m) => cleared.includes(m.id)));
+	const held = $derived(missions.filter((m) => cleared.includes(m.id)).length);
+	const pct = $derived(missions.length ? Math.round((held / missions.length) * 100) : 0);
 	const coopQ = $derived(coop ? '&coop=1' : '');
 
 	onMount(async () => {
@@ -18,44 +23,40 @@
 		missions = JSON.parse(WasmGame.campaign()) as MissionInfo[];
 		challenges = JSON.parse(WasmGame.challenges()) as ChallengeInfo[];
 		cleared = readCampaignCleared();
+		const loaded: Record<number, MapDoc> = {};
+		const ids = new Set([...missions.map((m) => m.mapId), ...challenges.map((c) => c.mapId)]);
+		for (const id of ids) {
+			loaded[id] = JSON.parse(WasmGame.theaterDoc(id)) as MapDoc;
+		}
+		docs = loaded;
 	});
 </script>
 
-<main class="brief">
-	<section class="brief-hero">
-		<div>
-			<p class="kicker">Frontier command · Campaign</p>
-			<h1>Operations board</h1>
-			<p class="lede">
-				Eight scripted theaters. Hold the listed wave, then keep going if you want the endless walk.
-				Clear a mission to unlock the next. Challenges are known seeds — same orders, same fight.
-			</p>
+<main class="war-menu campaign-menu">
+	<MenuChrome titleMark="Campaign" title="Operations" current="campaign">
+		{#snippet lead()}
+			<div class="op-progress" role="status">
+				<span>{held} / {missions.length || '—'} theaters held</span>
+				<div class="op-bar" aria-hidden="true"><i style="width: {pct}%"></i></div>
+			</div>
 			{#if complete}
 				<p class="hazard"><strong>Board clear.</strong> Run it again, or take a challenge seed.</p>
 			{/if}
-			<div class="actions">
-				<a class="btn" href="/">Briefing</a>
-				<a class="btn" href="/workshop">Map probe</a>
-				<a class="btn" href="/pack">Loadout</a>
-				<a class="btn" href="/replay">Replay</a>
-				<label class="coop-opt">
-					<input type="checkbox" bind:checked={coop} />
-					Co-op (local)
-				</label>
-			</div>
-		</div>
-		<div class="hero-foot">
-			<SettingsDock compact />
-			<p class="hint">Objectives do not freeze the sim. Advance when you are done, or stay.</p>
-		</div>
-	</section>
-	<aside class="brief-side">
+		{/snippet}
+		{#snippet actions()}
+			<label class="coop-opt">
+				<input type="checkbox" bind:checked={coop} />
+				Co-op
+			</label>
+		{/snippet}
+	</MenuChrome>
+	<section class="campaign-board">
 		<div>
 			<h2>Missions</h2>
 			{#if missions.length === 0}
 				<p class="hint">Linking ops…</p>
 			{:else}
-				<div class="theater-list">
+				<div class="theater-list campaign-grid">
 					{#each missions as m (m.id)}
 						{@const open = missionUnlocked(m.id, cleared)}
 						{@const done = cleared.includes(m.id)}
@@ -65,15 +66,27 @@
 								class:cleared={done}
 								href={`/play?mission=${m.id}${coopQ}`}
 							>
-								<strong>{m.id + 1}. {m.name}</strong>
-								<span>{m.briefing}</span>
-								<small>{m.mapName} · {m.modifierName} · {m.objective}</small>
+								{#if docs[m.mapId]}
+									<MapThumb map={docs[m.mapId]} />
+								{/if}
+								<span class="stamp" class:held={done}>{done ? 'Held' : 'Open'}</span>
+								<span class="theater-copy">
+									<span class="dossier-id">{String(m.id + 1).padStart(2, '0')}</span>
+									<strong>{m.name}</strong>
+									<small>{m.mapName} · {m.modifierName} · {m.objective}</small>
+								</span>
 							</a>
 						{:else}
 							<div class="theater locked">
-								<strong>{m.id + 1}. {m.name}</strong>
-								<span>Hold the previous theater first.</span>
-								<small>{m.mapName} · {m.modifierName}</small>
+								{#if docs[m.mapId]}
+									<MapThumb map={docs[m.mapId]} />
+								{/if}
+								<span class="stamp sealed">Sealed</span>
+								<span class="theater-copy">
+									<span class="dossier-id">{String(m.id + 1).padStart(2, '0')}</span>
+									<strong>{m.name}</strong>
+									<small>Hold the previous theater first.</small>
+								</span>
 							</div>
 						{/if}
 					{/each}
@@ -82,20 +95,31 @@
 		</div>
 		<div>
 			<h2>Challenges</h2>
-			<div class="theater-list">
+			<p class="hint">Public seeds. Verify the hash after you walk off the field.</p>
+			<div class="theater-list campaign-grid">
 				{#each challenges as c (c.id)}
 					<a class="theater" href={`/play?challenge=${c.id}${coopQ}`}>
-						<strong>{c.name}</strong>
-						<span>{c.blurb}</span>
-						<small>
-							{c.mapName} · {c.modifierName}
-							{#if c.holdUntilWave != null}
-								· hold {c.holdUntilWave}
-							{/if}
-						</small>
+						{#if docs[c.mapId]}
+							<MapThumb map={docs[c.mapId]} />
+						{/if}
+						<span class="stamp seed">Seed</span>
+						<span class="theater-copy">
+							<span class="dossier-id">{String(c.id + 1).padStart(2, '0')}</span>
+							<strong>{c.name}</strong>
+							<small>
+								{c.mapName} · {c.modifierName}
+								{#if c.holdUntilWave != null}
+									· hold {c.holdUntilWave}
+								{/if}
+							</small>
+						</span>
 					</a>
 				{/each}
 			</div>
 		</div>
-	</aside>
+	</section>
+	<footer class="menu-foot">
+		<SettingsDock compact />
+		<p class="hint">Objectives do not freeze the sim. Advance when you are done, or stay.</p>
+	</footer>
 </main>

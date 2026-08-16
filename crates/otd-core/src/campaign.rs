@@ -224,7 +224,7 @@ pub fn challenges() -> Vec<Challenge> {
             "Dust Cut, standard. Shades and Flickers in a pinched walk. Hold ten.",
             2u8,
             0u8,
-            0x5A1D_E0u64,
+            0x005A_1DE0_u64,
             Some(10),
         ),
         (
@@ -234,23 +234,25 @@ pub fn challenges() -> Vec<Challenge> {
             "Oxbow, ten guns. Seal the banks or they go around. Hold twelve.",
             7u8,
             5u8,
-            0x0B50_12u64,
+            0x000B_5012_u64,
             Some(12),
         ),
     ];
     spec.into_iter()
-        .map(|(id, slug, name, blurb, map_id, modifier_id, seed, hold)| Challenge {
-            id,
-            slug: slug.into(),
-            name: name.into(),
-            blurb: blurb.into(),
-            map_id,
-            map_name: theater_name(map_id),
-            modifier_id,
-            modifier_name: mod_name(modifier_id),
-            seed,
-            hold_until_wave: hold,
-        })
+        .map(
+            |(id, slug, name, blurb, map_id, modifier_id, seed, hold)| Challenge {
+                id,
+                slug: slug.into(),
+                name: name.into(),
+                blurb: blurb.into(),
+                map_id,
+                map_name: theater_name(map_id),
+                modifier_id,
+                modifier_name: mod_name(modifier_id),
+                seed,
+                hold_until_wave: hold,
+            },
+        )
         .collect()
 }
 
@@ -276,7 +278,11 @@ mod tests {
     fn every_mission_map_opens() {
         for m in campaign() {
             let (grid, _, _) = theater_by_id(m.map_id).expect("map");
-            assert!(FlowField::compute(&grid).spawns_reachable(&grid), "{}", m.name);
+            assert!(
+                FlowField::compute(&grid).spawns_reachable(&grid),
+                "{}",
+                m.name
+            );
         }
         for c in challenges() {
             let (grid, _, _) = theater_by_id(c.map_id).expect("challenge map");

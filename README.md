@@ -2,13 +2,13 @@
 
 An open-source **maze tower defense** game. You are not painting turrets along a fixed track. You are a commander with scrap, guns, and a grid: wall the field into a kill corridor, cover the air, and keep the frontier relay alive for as many waves as you can.
 
-**Shape the kill zone. Hold the relay.**
+**Shape the path. Keep the lamp lit.**
 
 MIT licensed. Built to be played, forked, and extended.
 
 ## Play (1.0)
 
-Endless matches on eight theaters, an **eight-mission** campaign, known-seed challenges, and **catalog packs**. Barricades and towers **block ground pathing**. Air ignores the maze and steers at the nearest relay. Ten buildables, four upgrade tiers, targeting modes, three strikes, settings (mute, palettes, UI scale, **key rebind**), pan/zoom, a **minimap**, a **map probe**, a **loadout probe**, replay verify hashes, **local co-op** (`/play?coop=1`), a **wave director** with intel, **interest** on leftover scrap, **paint-drag** placement, **relay repair**, **structure move**, **overcharge**, a **Walk** overlay, and a **replay desk** (`/replay`).
+Endless matches on ten theaters, an **eight-mission** campaign, known-seed challenges, and **catalog packs**. Barricades and towers **block ground pathing**. Air ignores the maze and steers at the nearest relay. Ten buildables, four upgrade tiers, targeting modes, three strikes, settings (mute, palettes, UI scale, **key rebind**), pan/zoom, a **minimap**, a **map probe**, a **loadout probe**, replay verify hashes, **local co-op** (`/play?coop=1`), a **wave director** with intel, **interest** on leftover scrap, **paint-drag** placement, **relay repair**, **structure move**, **overcharge**, a **Walk** overlay, and a **replay desk** (`/replay`).
 
 ### Controls
 

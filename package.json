@@ -7,6 +7,7 @@
     "wasm": "wasm-pack build crates/otd-wasm --dev --target web --out-dir ../../web/src/lib/wasm --out-name otd",
     "wasm:release": "wasm-pack build crates/otd-wasm --release --target web --out-dir ../../web/src/lib/wasm --out-name otd",
     "dev": "npm run wasm && npm --prefix web run dev",
+    "dev:fast": "npm run wasm:release && npm --prefix web run dev",
     "build": "npm run wasm:release && npm --prefix web run build",
     "preview": "npm --prefix web run preview",
     "check": "npm run wasm && npm --prefix web run check",

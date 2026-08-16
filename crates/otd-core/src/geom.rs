@@ -6,6 +6,10 @@ pub struct Vec2 {
     pub y: f32,
 }
 
+#[allow(
+    clippy::should_implement_trait,
+    reason = "inherent value-semantics helpers, not operator overloads"
+)]
 impl Vec2 {
     pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
 

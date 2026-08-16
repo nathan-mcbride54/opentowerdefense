@@ -94,6 +94,8 @@ export interface MapStatic {
 	h: number;
 	id: number;
 	name: string;
+	slug: string;
+	seed: number;
 	core: [number, number][];
 	spawns: [number, number][];
 	rocks: [number, number][];
@@ -250,6 +252,9 @@ export interface Snapshot {
 	after: AfterAction;
 	interestPaid: number;
 	interestBps: number;
+	moveCost: number;
+	repairCost: number;
+	overchargeCost: number;
 	walk: number;
 	relocating: boolean;
 	relocating2: boolean;

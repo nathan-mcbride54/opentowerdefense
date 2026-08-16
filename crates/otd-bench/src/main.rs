@@ -11,7 +11,7 @@ fn main() -> ExitCode {
     if args.is_empty() || args.iter().any(|a| a == "-h" || a == "--help") {
         eprintln!(
             "otd-bench — headless Open Tower Defense\n\n\
-             Usage:\n  otd-bench --validate FILE.json\n  otd-bench --validate-pack FILE.json\n  otd-bench --verify FILE.json\n  otd-bench --map kilo [--mod standard] [--pack FILE.json] [--until-wave 20]\n  otd-bench --mission 0 [--until-wave N]\n  otd-bench --challenge 0\n  otd-bench --map-json FILE.json [--orders FILE.json] [--until-wave N] [--until-tick N]\n"
+             Usage:\n  otd-bench --validate FILE.json\n  otd-bench --validate-pack FILE.json\n  otd-bench --verify FILE.json\n  otd-bench --map kilo [--mod standard] [--pack FILE.json] [--until-wave 20]\n  otd-bench --mission 0 [--until-wave N]\n  otd-bench --challenge 0\n  otd-bench --map-json FILE.json [--until-wave N] [--until-tick N]\n  otd-bench --orders FILE.json [--until-wave N] [--until-tick N]\n"
         );
         return ExitCode::SUCCESS;
     }
@@ -26,6 +26,7 @@ fn main() -> ExitCode {
     let mut mission_id: Option<u8> = None;
     let mut challenge_id: Option<u8> = None;
     let mut mod_slug = "standard".to_string();
+    let mut mod_explicit = false;
     let mut until_wave: Option<u32> = None;
     let mut until_tick: Option<u64> = None;
 
@@ -62,23 +63,48 @@ fn main() -> ExitCode {
             }
             "--mission" => {
                 i += 1;
-                mission_id = args.get(i).and_then(|s| s.parse().ok());
+                match args.get(i).map(|s| s.parse::<u8>()) {
+                    Some(Ok(v)) => mission_id = Some(v),
+                    _ => {
+                        eprintln!("--mission needs a number");
+                        return ExitCode::from(2);
+                    }
+                }
             }
             "--challenge" => {
                 i += 1;
-                challenge_id = args.get(i).and_then(|s| s.parse().ok());
+                match args.get(i).map(|s| s.parse::<u8>()) {
+                    Some(Ok(v)) => challenge_id = Some(v),
+                    _ => {
+                        eprintln!("--challenge needs a number");
+                        return ExitCode::from(2);
+                    }
+                }
             }
             "--mod" => {
                 i += 1;
                 mod_slug = args.get(i).cloned().unwrap_or(mod_slug);
+                mod_explicit = true;
             }
             "--until-wave" => {
                 i += 1;
-                until_wave = args.get(i).and_then(|s| s.parse().ok());
+                match args.get(i).map(|s| s.parse::<u32>()) {
+                    Some(Ok(v)) => until_wave = Some(v),
+                    _ => {
+                        eprintln!("--until-wave needs a number");
+                        return ExitCode::from(2);
+                    }
+                }
             }
             "--until-tick" => {
                 i += 1;
-                until_tick = args.get(i).and_then(|s| s.parse().ok());
+                match args.get(i).map(|s| s.parse::<u64>()) {
+                    Some(Ok(v)) => until_tick = Some(v),
+                    _ => {
+                        eprintln!("--until-tick needs a number");
+                        return ExitCode::from(2);
+                    }
+                }
             }
             other => {
                 eprintln!("Unknown flag: {other}");
@@ -183,6 +209,21 @@ fn main() -> ExitCode {
         };
     }
 
+    // A replay carries its own map, modifier and seed, and would silently discard any of
+    // these — the --help text used to advertise `--map-json ... --orders ...` as valid.
+    if orders_path.is_some()
+        && (map_json.is_some()
+            || map_slug.is_some()
+            || mission_id.is_some()
+            || challenge_id.is_some()
+            || mod_explicit)
+    {
+        eprintln!(
+            "--orders carries its own map and modifier; drop --map-json/--map/--mod/--mission/--challenge"
+        );
+        return ExitCode::from(2);
+    }
+
     let modifier = parse_mod(&mod_slug);
     let mut game = if let Some(id) = mission_id {
         match Game::mission(id) {
@@ -264,9 +305,13 @@ fn main() -> ExitCode {
         90_000
     }));
     game.run_recorded(until_wave, tick_cap);
+    // The real replay fingerprint, not snap.seed_hex — the seed is a per-theater constant,
+    // so reporting it as "hash" made every run of a map look identical regardless of
+    // modifier, orders or pack.
+    let hash = game.replay_bundle().hash.unwrap_or_default();
     let snap = game.snapshot();
     println!(
-        "map={} id={} mod={} wave={} ticks={} kills={} leaks={} integrity={} pack={} hash={} {}",
+        "map={} id={} mod={} wave={} ticks={} kills={} leaks={} integrity={} pack={} seed={} hash={} {}",
         snap.mission_name.as_deref().unwrap_or(&snap.map_name),
         if snap.map_id == WORKSHOP_MAP_ID {
             "workshop".into()
@@ -281,6 +326,7 @@ fn main() -> ExitCode {
         snap.integrity,
         snap.pack_name.as_deref().unwrap_or("-"),
         snap.seed_hex,
+        hash,
         if snap.defeated {
             "DEFEAT"
         } else if snap.objective_cleared {

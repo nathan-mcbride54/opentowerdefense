@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const DT: f32 = 1.0 / 60.0;
-pub const STARTING_CREDITS: i32 = 480;
+pub const STARTING_CREDITS: i32 = 1000;
 pub const STARTING_INTEGRITY: i32 = 20;
 pub const SELL_RATIO: f32 = 0.65;
 pub const MAX_TIER: u8 = 3;
@@ -504,13 +504,13 @@ pub const STRIKE_CATALOG: &[StrikeStats] = &[
     },
 ];
 
-    #[allow(dead_code)]
-    pub fn stats_for(kind: BuildKind) -> Option<&'static TurretStats> {
+#[allow(dead_code)]
+pub fn stats_for(kind: BuildKind) -> Option<&'static TurretStats> {
     BUILD_CATALOG.iter().find(|s| s.kind == kind)
 }
 
-    #[allow(dead_code)]
-    pub fn strike_stats(kind: StrikeKind) -> Option<&'static StrikeStats> {
+#[allow(dead_code)]
+pub fn strike_stats(kind: StrikeKind) -> Option<&'static StrikeStats> {
     STRIKE_CATALOG.iter().find(|s| s.kind == kind)
 }
 
@@ -553,8 +553,8 @@ pub fn scale_turret(mut s: TurretStats, tier: u8) -> TurretStats {
     s
 }
 
-    #[allow(dead_code)]
-    pub fn scaled_turret(kind: BuildKind, tier: u8) -> Option<TurretStats> {
+#[allow(dead_code)]
+pub fn scaled_turret(kind: BuildKind, tier: u8) -> Option<TurretStats> {
     Some(scale_turret(*stats_for(kind)?, tier))
 }
 
@@ -567,8 +567,8 @@ pub fn upgrade_cost_for(base_cost: i32, current_tier: u8) -> Option<i32> {
     Some((base * 0.78 * step * (1.0 + 0.12 * current_tier as f32)).round() as i32)
 }
 
-    #[allow(dead_code)]
-    pub fn upgrade_cost(kind: BuildKind, current_tier: u8) -> Option<i32> {
+#[allow(dead_code)]
+pub fn upgrade_cost(kind: BuildKind, current_tier: u8) -> Option<i32> {
     upgrade_cost_for(stats_for(kind)?.cost, current_tier)
 }
 

@@ -36,6 +36,9 @@ pub struct MapStatic {
     pub h: i32,
     pub id: u8,
     pub name: String,
+    /// Visual identity, so the in-match ground matches the thumbnail the player picked.
+    pub slug: String,
+    pub seed: u64,
     pub core: Vec<[i32; 2]>,
     pub spawns: Vec<[i32; 2]>,
     pub rocks: Vec<[i32; 2]>,
@@ -127,7 +130,9 @@ pub struct ProjView {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FxView {
-    pub kind: String,
+    /// `&'static str`: the sim already stores these as static strings, and building a
+    /// fresh String per effect meant up to 180 heap allocations per frame.
+    pub kind: &'static str,
     pub x: f32,
     pub y: f32,
     pub life: f32,
@@ -246,6 +251,11 @@ pub struct Snapshot {
     pub after: AfterAction,
     pub interest_paid: i32,
     pub interest_bps: u32,
+    /// Action prices, so the HUD never hardcodes them. A pack retune must not make a
+    /// button label lie about what it costs.
+    pub move_cost: i32,
+    pub repair_cost: i32,
+    pub overcharge_cost: i32,
     pub walk: u32,
     pub relocating: bool,
     pub relocating2: bool,
