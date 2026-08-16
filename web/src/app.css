@@ -814,7 +814,11 @@ kbd {
 	box-shadow:
 		inset 0 1px 0 var(--line-bevel),
 		0 -10px 28px rgba(0, 0, 0, 0.45);
-	padding: 0.18rem var(--sp-5) 0.14rem;
+	/* 2.7px/2.1px was starvation compensation chosen when this bar was 219px tall. At
+	   ~142px, with the amber seam directly above, the readouts would otherwise sit hard
+	   against their own accent edge and the dock would read as trimmed rather than built.
+	   Spends 3.9px of a ~77px win. */
+	padding: 0.3rem var(--sp-5) 0.28rem;
 	gap: 0.12rem;
 }
 
@@ -823,7 +827,23 @@ kbd {
 	/* Track 1 must be shrinkable: a bare `max-content` sizes to the full un-scrolled
 	   arsenal and overflows the viewport between ~1101px and ~1545px, where
 	   `.play { overflow: hidden }` clips the command column with no way to reach it. */
-	grid-template-columns: minmax(0, max-content) minmax(12rem, 1fr) max-content;
+	/* The wrap in .dock-scores was not a design decision, it was track starvation: track 1
+	   takes its full 929px max-content and left intel 207.56px, a couple of px short of
+	   holding Credits/Tower/Wave on one line, so the readouts broke over four rows and the
+	   dock stood at 219px.
+
+	   Every px given to track 2 comes straight out of the arsenal, so this floor is sized
+	   to the widest the primaries ever get, measured rather than guessed. Credits is the
+	   only one that changes width: the three together need 187.8px at $308, 203.2px at
+	   $9999 and 217.8px at $99999. 16rem leaves 223px of content, which clears even a
+	   five-figure balance. Anything less is a trap that only springs late in a run — at
+	   14.5rem the dock sits at a tidy 141.9px until the player banks four figures, then
+	   jumps to 200.9px. Wider does not pay either: 18rem measures the same height and
+	   costs another store tile.
+
+	   Track 2 stays `1fr`. A non-flexible max would let maximize-tracks split the free
+	   space evenly and hand intel hundreds of px the readouts cannot use. */
+	grid-template-columns: minmax(0, max-content) minmax(16rem, 1fr) max-content;
 	gap: 0.35rem 0.3rem;
 	align-items: center;
 	min-height: 0;
@@ -957,21 +977,56 @@ kbd {
 	flex-direction: column;
 	gap: var(--sp-1);
 	min-width: 0;
-	padding: 0 var(--sp-4);
+	/* The border-left/right still read as a panel at 7.5px inset. Cheapest width in the file. */
+	padding: 0 var(--sp-3);
 	border-left: 1px solid var(--line);
 	border-right: 1px solid var(--line);
 }
 
+/* flex-wrap STAYS. It is the safety valve, and it is why this proposal degrades instead
+   of breaking: if the secondary run ever outgrows the column it breaks to a second line
+   (dock 152.6px, still inside target) rather than overflowing the border-right or hiding
+   a required readout behind a scroll fade. The 11.25px column gap was 56.25px of the
+   one-line budget across five gaps; 7.5px still separates the readouts, and Tower and
+   Wave carry a 2px border-left as the real divider anyway. */
 .dock-scores {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: flex-end;
-	gap: 0.2rem 0.75rem;
+	gap: var(--sp-0) var(--sp-3);
 }
 
-.dock-credits span,
-.dock-score span,
-.dock-stat span {
+/* The five secondary readouts travel as one unit, so line 1 is always exactly the three
+   primaries and the run breaks as a block instead of shedding Score at 1366 and
+   reabsorbing it at 1920. It also removes the pathological case entirely: a 5- or
+   6-figure credit total now widens line 1 into 112px of slack rather than pushing a
+   stat onto a third row. */
+.dock-run {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--sp-0) var(--sp-3);
+	min-width: 0;
+}
+
+/* html/body set line-height: 1.45 at the top of this file, and that 21.75px strut is
+   taller than these numerals' own line boxes - every readout was paying for leading it
+   never showed. The captions and the values all declare their own line-height already;
+   this finishes the job and changes no glyph size anywhere. */
+.dock-credits,
+.dock-score,
+.dock-stat {
+	line-height: 1;
+}
+
+/* Direct children ONLY. Unscoped, this rule also matched `.was` and `.delta` inside
+   .dock-stat.walk's <b> and rendered the hover delta as two stacked muted caption
+   blocks - so hovering a buildable cell grew the readout block by ~17px. Scoping it is
+   what makes "38 -> 41" read as one inline string, and it is a live bug fix, not just
+   protection for the new inline pairs. */
+.dock-credits > span,
+.dock-score > span,
+.dock-stat > span {
 	display: block;
 	font-family: var(--cond);
 	letter-spacing: 0.16em;
@@ -997,7 +1052,11 @@ kbd {
 
 .dock-credits small {
 	display: block;
-	margin-top: 0.12rem;
+	/* Credits is the tallest block on line 1, so this comes straight off the dock. The
+	   chip deliberately STAYS on its own line: moving it beside the caption (P2's
+	   grid-areas trick) would save another ~13px, but the chip's text changes width every
+	   time interest is paid, and in a nowrap tier that shifts every readout to its right. */
+	margin-top: 0.06rem;
 	color: var(--gold);
 	font-family: var(--cond);
 	letter-spacing: 0.08em;
@@ -1026,6 +1085,38 @@ kbd {
 	font-style: normal;
 	font-size: 0.72em;
 	color: var(--muted);
+}
+
+/* Below the three primaries, everything reads as one inline run of label:value pairs.
+   Stacking a caption over each of these cost ~14px of column height apiece and bought
+   nothing - none of them is a number you read mid-wave. Tower and Wave keep --t-6 and
+   their stacked caption, so the gap between "am I about to lose" and "what I check
+   between waves" gets WIDER, not flatter. */
+.dock-run .dock-score,
+.dock-run .dock-stat {
+	display: flex;
+	align-items: baseline;
+	gap: var(--sp-1);
+}
+
+.dock-run > div > span {
+	margin-bottom: 0;
+}
+
+/* 15px is 33% above the --t-1 floor. The rem line-height is a fixed LENGTH, so the
+   1.1em hover delta inherits a box it cannot inflate. */
+.dock-run b {
+	font-size: var(--t-3);
+	line-height: 1.15rem;
+}
+
+/* Reserve the value's box whether or not a cell is hovered, in rem so it tracks uiScale.
+   inline-flex makes the <b> size to its items rather than to an inline formatting
+   context, and the min-height pins the floor: the dock cannot breathe under the cursor. */
+.dock-run .dock-stat.walk b {
+	display: inline-flex;
+	align-items: baseline;
+	min-height: 1.15rem;
 }
 
 .dock-stat.integrity,
@@ -1067,6 +1158,9 @@ kbd {
 
 .dock-stat.walk .delta {
 	font-size: 1.1em;
+	/* Same fixed length as the value it sits beside, so the hovered and unhovered readings
+	   occupy the same line box instead of the delta's 16.5px type driving it taller. */
+	line-height: 1.15rem;
 }
 
 .dock-stat.walk .delta.up {
@@ -1156,7 +1250,8 @@ kbd {
 	font-family: var(--cond);
 	letter-spacing: 0.14em;
 	text-transform: uppercase;
-	font-size: 0.68rem;
+	/* Was 0.68rem = 10.2px, under the --t-1 floor. */
+	font-size: var(--t-1);
 	color: var(--muted);
 }
 
@@ -1183,17 +1278,24 @@ kbd {
 	white-space: nowrap;
 }
 
+/* Two lines inheriting the 1.45 body strut were what made .wave-preview 38.8px tall
+   rather than icon-height. 1.2 is deliberately not the 1.15 the surveys proposed:
+   Barlow Condensed descenders in "Runner"/"Bulwark" sit close to the box edge there. */
 .wave-script strong {
 	font-family: var(--cond);
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
 	font-size: 0.78rem;
+	line-height: 1.2;
 	color: var(--ice);
 }
 
 .wave-script span {
 	color: var(--muted);
-	font-size: 0.72rem;
+	/* Was 0.72rem = 10.8px, under the --t-1 floor, on the part list players read to decide
+	   what to build. The tighter leading pays for the larger type and then some. */
+	font-size: var(--t-1);
+	line-height: 1.2;
 	white-space: nowrap;
 }
 
@@ -1203,6 +1305,10 @@ kbd {
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
 	font-size: var(--t-1);
+	/* A one-line <p> inheriting 1.45 rendered a 16.31px box for 11.25px of condensed
+	   uppercase. It keeps its own full-width line - moving it beside the wave strip saves
+	   another 13px but makes a live countdown reflow its own line count as it ticks. */
+	line-height: 1.2;
 	color: var(--muted);
 }
 
@@ -1211,14 +1317,30 @@ kbd {
 	color: var(--accent-lit);
 }
 
+/* Six columns is a spanning canvas, not six buttons: it lets the transport pair stay
+   halves (span 3) while the meta controls become thirds (span 2), which is what folds
+   five rows into four. No button gets shorter, no padding is trimmed, no font shrinks -
+   the 27.50/26.00 hit targets are untouched. 14.5rem is what three meta cells need at
+   ~70.7px each; it also widens the transport cells 93.65 -> 107.4px. */
 .dock-cmd {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: repeat(6, minmax(0, 1fr));
 	gap: 0.18rem;
-	min-width: 11.5rem;
+	min-width: 14.5rem;
 	align-content: start;
 	/* Keeps the primary action and the nav row off the dock's top and bottom edges. */
 	padding: var(--sp-2) 0 var(--sp-3);
+}
+
+/* Placement only. DOM order, tab order, the hotkey bindings and every `disabled`
+   affordance are untouched. The :not() guard keeps .send-now on 1 / -1 without a
+   specificity fight with the rule below. */
+.dock-cmd .cmd:not(.send-now) {
+	grid-column: span 3;
+}
+
+.dock-cmd .btn {
+	grid-column: span 2;
 }
 
 .dock-cmd .send-now {
@@ -1255,7 +1377,10 @@ kbd {
 	background: transparent;
 	border-color: rgba(4, 18, 8, 0.35);
 	color: var(--accent-ink);
-	font-size: 0.62rem;
+	/* Was 0.62rem = 9.3px, on the keycap of the primary action - the exact regression the
+	   comment on .dock .shop-head records having already been reverted once. Free: the
+	   11.25px keycap's 15px line box still sits inside the 13.2px label's 16.06px row. */
+	font-size: var(--t-1);
 	padding: 0;
 	min-width: 0;
 }
@@ -1265,6 +1390,20 @@ kbd {
 	padding: 0.35rem 0.5rem;
 	font-size: var(--t-1);
 	width: auto;
+}
+
+/* <a> inherits the body's 1.45 line-height where <button> gets the UA's `normal` from the
+   `font:` shorthand, which is why Ops and Briefing measure 28.81 against the command
+   buttons' 27.50. In the new four-row grid the .btn is the tallest item in the last row,
+   so it SETS this column's height - this is the cheapest 2.81px in the change. The
+   meta row is thirds, so its labels get their horizontal padding back as text width;
+   nowrap is load-bearing, because a label that wrapped to two lines would put the fifth
+   row straight back. */
+.dock-cmd .btn {
+	line-height: 1.2;
+	padding-inline: var(--sp-1);
+	white-space: nowrap;
+	text-align: center;
 }
 
 /* One label+keycap convention. Previously the keycap ran straight into the label, so
@@ -1303,15 +1442,25 @@ kbd {
 	background: rgba(5, 5, 6, 0.82);
 }
 
+/* This is the row that disappears. Settings joins Ops and Briefing as the third of a
+   meta row - all three are "leave the fight" controls - instead of owning a full 25.5px
+   row of its own. The wrapper stays position: relative, so the panel keeps opening
+   upward (.compact .panel in SettingsDock.svelte) and right-anchored
+   (.dock .settings .panel below), clamped by its own max-width: calc(100vw - 1.5rem). */
 .dock-cmd .settings {
 	position: relative;
 	width: auto;
-	grid-column: 1 / -1;
+	grid-column: span 2;
 }
 
 .dock-cmd .settings .gear {
 	width: 100%;
-	padding: 0.35rem 0.5rem;
+	/* The wrapper stretches to the row height but the button inside it did not, leaving a
+	   visible lip beside Ops and Briefing. Horizontal padding comes back as label width in
+	   a ~70px cell, and nowrap makes a two-line label impossible. */
+	height: 100%;
+	padding: 0.35rem var(--sp-1);
+	white-space: nowrap;
 	font-size: var(--t-1);
 }
 
@@ -1320,6 +1469,24 @@ kbd {
 	bottom: calc(100% + 0.35rem);
 	right: 0;
 	left: auto;
+}
+
+/* Watch mode (/replay, spectate) renders no arsenal, so .dock-body's three-track template
+   hands .dock-cmd the flexible middle track and stretches it to ~780px - Pause and Speed
+   become 390px cells - while the span-3 auto-flow leaves a 1-column hole at the end of
+   row 2 and a 2-column hole in row 3. Two rules fix both: give the two remaining columns
+   their own template, and run the four transport buttons as thirds so the block collapses
+   to two clean rows of three. Confined to the desktop band on purpose; the stacked
+   layouts at <=1100px and <=860px own themselves and must not be outranked by a
+   higher-specificity selector. */
+@media (min-width: 1101px) {
+	.dock-body.watch {
+		grid-template-columns: minmax(16rem, 1fr) max-content;
+	}
+
+	.dock-body.watch .dock-cmd .cmd {
+		grid-column: span 2;
+	}
 }
 
 /* Between the 1100px stack and ~1545px the full-size tray plus intel plus command
@@ -2173,7 +2340,10 @@ a.theater:hover {
 	}
 	.dock-cmd {
 		min-width: 0;
-		grid-template-columns: 1fr 1fr;
+		/* Must match the desktop template. Leaving 2 tracks under the new span-3 / span-2
+		   children generates implicit auto columns, and an explicit `1fr 1fr` plus auto
+		   tracks in a width-constrained container is exactly how the phone dock overflows. */
+		grid-template-columns: repeat(6, minmax(0, 1fr));
 	}
 	.dock .build-list {
 		max-width: none;

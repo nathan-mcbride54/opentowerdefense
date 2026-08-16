@@ -436,7 +436,9 @@
 		</div>
 
 		<footer class="tray dock">
-			<div class="dock-body">
+			<!-- `watch` is on the body, not the command block, because the missing arsenal
+			     changes the TRACK layout as well as the button flow. -->
+			<div class="dock-body" class:watch>
 			{#if !watch}
 			<div class="tray-main dock-arsenal">
 				<div class="build-list">
@@ -517,10 +519,6 @@
 							</small>
 						{/if}
 					</div>
-					<div class="dock-score">
-						<span>Score</span>
-						<b>{snap?.kills ?? 0}</b>
-					</div>
 					<div
 						class="dock-stat integrity"
 						class:hurt={relayFrac <= 0.6 && relayFrac > 0.25}
@@ -533,40 +531,50 @@
 						<span>Wave</span>
 						<b>{snap?.wave ?? '—'}</b>
 					</div>
-					{#if snap}
-						<div class="dock-stat walk">
-							<span>Walk</span>
-							<b>
-								{#if snap.hover?.walkAfter != null && snap.hover.walkAfter !== snap.walk}
-									{@const after = snap.hover.walkAfter}
-									<span class="was">{snap.walk}</span><span
-										class="delta"
-										class:up={after > snap.walk}
-										class:down={after < snap.walk}
-										>→{after}</span
-									>
-								{:else}
-									{snap.walk}
-								{/if}
-							</b>
+					<!-- Credits, Tower and Wave are the three read-at-a-glance readouts and keep
+					     line 1 to themselves. Everything below them travels as one inline run so
+					     the wrap breaks in the right place at every width, and so screen-reader
+					     order matches visual order (a CSS `order` would have desynced them). -->
+					<div class="dock-run">
+						<div class="dock-score">
+							<span>Score</span>
+							<b>{snap?.kills ?? 0}</b>
 						</div>
-					{/if}
-					<div class="dock-stat best">
-						<span>Best</span>
-						<b>{best || '—'}</b>
+						{#if snap}
+							<div class="dock-stat walk">
+								<span>Walk</span>
+								<b>
+									{#if snap.hover?.walkAfter != null && snap.hover.walkAfter !== snap.walk}
+										{@const after = snap.hover.walkAfter}
+										<span class="was">{snap.walk}</span><span
+											class="delta"
+											class:up={after > snap.walk}
+											class:down={after < snap.walk}
+											>→{after}</span
+										>
+									{:else}
+										{snap.walk}
+									{/if}
+								</b>
+							</div>
+						{/if}
+						<div class="dock-stat best">
+							<span>Best</span>
+							<b>{best || '—'}</b>
+						</div>
+						{#if snap?.turretCap != null}
+							<div class="dock-stat guns">
+								<span>Guns</span>
+								<b>{snap.turretCount}/{snap.turretCap}</b>
+							</div>
+						{/if}
+						{#if snap?.objectiveWave != null}
+							<div class="dock-stat hold" class:cleared={snap.objectiveCleared}>
+								<span>{snap.objectiveCleared ? 'Objective' : 'Hold'}</span>
+								<b>{snap.objectiveCleared ? 'Held' : snap.objectiveWave}</b>
+							</div>
+						{/if}
 					</div>
-					{#if snap?.turretCap != null}
-						<div class="dock-stat guns">
-							<span>Guns</span>
-							<b>{snap.turretCount}/{snap.turretCap}</b>
-						</div>
-					{/if}
-					{#if snap?.objectiveWave != null}
-						<div class="dock-stat hold" class:cleared={snap.objectiveCleared}>
-							<span>{snap.objectiveCleared ? 'Objective' : 'Hold'}</span>
-							<b>{snap.objectiveCleared ? 'Held' : snap.objectiveWave}</b>
-						</div>
-					{/if}
 				</div>
 				<div class="wave-preview" class:empty={!snap?.waveIntel?.parts.length}>
 					{#if snap?.waveIntel?.parts.length}
