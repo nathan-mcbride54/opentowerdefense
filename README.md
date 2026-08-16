@@ -55,6 +55,8 @@ npm run dev
 
 Then open the URL Vite prints (usually `http://localhost:5173`). After changing Rust, run `npm run wasm` again (or restart `npm run dev`) so the browser picks up a new module.
 
+`npm run dev` builds **debug** Wasm — fast to compile, but several times slower to run. Use `npm run dev:fast` (release Wasm, same dev server) before drawing any conclusion about simulation performance.
+
 ```bash
 npm test              # Rust simulation tests
 npm run check         # Wasm + Svelte/TS
