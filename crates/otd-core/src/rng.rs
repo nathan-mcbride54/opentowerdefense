@@ -46,3 +46,15 @@ impl Rng {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn even_and_odd_seeds_diverge() {
+        let mut even = Rng::new(0);
+        let mut odd = Rng::new(1);
+        assert_ne!(even.next_u64(), odd.next_u64());
+    }
+}

@@ -234,4 +234,34 @@ mod tests {
         c.orders[0].op = OrderOp::SetBuild { kind: 3 };
         assert_ne!(replay_hash(&a), replay_hash(&c));
     }
+
+    #[test]
+    fn workshop_hash_cares_about_cell_positions() {
+        let map = crate::mapdoc::MapDoc {
+            slug: "w".into(),
+            name: "W".into(),
+            blurb: String::new(),
+            hazard: String::new(),
+            w: 16,
+            h: 12,
+            seed: 1,
+            cores: vec![[2, 2]],
+            spawns: vec![[0, 0]],
+            rocks: vec![[4, 4]],
+        };
+        let a = ReplayFile {
+            version: 1,
+            map_id: None,
+            map: Some(map.clone()),
+            modifier_id: 0,
+            seed: 1,
+            orders: vec![],
+            pack: None,
+            outcome: None,
+            hash: None,
+        };
+        let mut b = a.clone();
+        b.map.as_mut().unwrap().rocks = vec![[5, 5]];
+        assert_ne!(replay_hash(&a), replay_hash(&b));
+    }
 }

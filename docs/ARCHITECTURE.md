@@ -53,7 +53,7 @@ Catalog data (names, costs, ranges, blurbs) is also owned by `otd-core` and expo
 
 TypeScript owns pixels. Turrets, hulls, and tracers are drawn procedurally on a 2D canvas so Phase 1 has no asset pipeline. Barrel angles and projectile positions come from the sim; the renderer does not invent hits.
 
-When a sprite sheet arrives in a later phase, it should bind to the same snapshot kinds (`autocannon`, `runner`, …) without moving logic into the client.
+Procedural art lives in `web/src/lib/game/sprites.ts` (hulls, guns, terrain stamps, HUD icons). `renderer.ts` composites that onto the canvas from the snapshot. If a sprite sheet arrives later, bind it to the same snapshot kinds (`autocannon`, `runner`, …) without moving combat math into the client.
 
 ## UI
 
@@ -93,7 +93,7 @@ cargo run -p otd-bench -- --map kilo --pack pack.json --until-wave 8
 
 ## Determinism
 
-`otd-core` uses an explicit xorshift RNG seeded per match. Do not call `rand` or `Math.random` inside the sim. Every order (build, click, upgrade, call wave, …) is logged with a tick. Pause → Copy replay writes `{ mapId, seed, modifierId, orders, pack, outcome, hash }`. The hash ignores `hash` and `outcome` and fingerprints the resolved loadout. Replays feed `Game::from_replay` / `otd-bench --orders`. `otd-bench --verify` replays to the claimed tick count and checks hash + outcome.
+`otd-core` uses SplitMix64 seeded per match. Do not call `rand` or `Math.random` inside the sim, and do not force seeds odd — that was an xorshift guard and made every even seed identical to seed+1. Every order (build, click, upgrade, call wave, …) is logged with a tick. Pause → Copy replay writes `{ mapId, seed, modifierId, orders, pack, outcome, hash }`. The hash ignores `hash` and `outcome` and fingerprints the resolved loadout. Replays feed `Game::from_replay` / `otd-bench --orders`. `otd-bench --verify` replays to the claimed tick count and checks hash + outcome.
 
 ## Adding content
 
@@ -107,6 +107,6 @@ cargo run -p otd-bench -- --map kilo --pack pack.json --until-wave 8
 | Retune guns without a rebuild | JSON `PackDoc` (`/pack` / `--pack`) |
 | Add a modifier | `crates/otd-core/src/modifiers.rs` + HUD chip if needed |
 | Add an order (targeting mode, strike) | `sim.rs` command + Wasm method + HUD control |
-| Change how the field looks | `web/src/lib/game/renderer.ts` |
+| Change how the field looks | `web/src/lib/game/sprites.ts` (art) and `renderer.ts` (the canvas pass) |
 
 Keep combat math out of Svelte components.

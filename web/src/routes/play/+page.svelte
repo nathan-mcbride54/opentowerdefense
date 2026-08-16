@@ -487,7 +487,8 @@
 							class:active={snap?.strike === item.id}
 							type="button"
 							onclick={() => session?.setStrike(item.id)}
-							disabled={!(hud?.ready ?? false) && snap?.strike !== item.id}
+							disabled={(!(hud?.ready ?? false) || (snap?.credits ?? 0) < item.cost) &&
+								snap?.strike !== item.id}
 							title={item.blurb}
 						>
 							<span class="shop-head">

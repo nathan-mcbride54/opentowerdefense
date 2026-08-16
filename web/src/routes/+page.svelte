@@ -15,7 +15,7 @@
 		['T / C / V / G / B', 'Target / Helios / Repair / Move / Overcharge'],
 		['U / X', 'Upgrade / sell'],
 		['N', 'Call wave'],
-		['Space / Esc', 'Pause'],
+		['Space / F / Esc', 'Pause / speed'],
 		['M', 'Mute'],
 		['Home', 'Reset view']
 	];

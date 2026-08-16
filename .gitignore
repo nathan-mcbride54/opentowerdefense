@@ -14,3 +14,6 @@ web/src/lib/wasm/**
 
 .env
 .env.*
+
+# Local Claude Code launch config — not part of the game.
+.claude/

@@ -145,6 +145,10 @@
 		return { x, y };
 	}
 
+	function dirty() {
+		ok = false;
+	}
+
 	function stamp(ev: PointerEvent) {
 		const cell = cellAt(ev);
 		if (!cell) return;
@@ -160,6 +164,7 @@
 	}
 
 	async function validate() {
+		resizeGrid();
 		const { default: init, WasmGame } = await import('$lib/wasm/otd');
 		await init();
 		const r = JSON.parse(WasmGame.validateMap(JSON.stringify(doc()))) as {
@@ -176,11 +181,13 @@
 	}
 
 	function play() {
+		resizeGrid();
 		sessionStorage.setItem(WORKSHOP_STORAGE, JSON.stringify(doc()));
 		window.location.href = '/play?workshop=1';
 	}
 
 	function copyJson() {
+		resizeGrid();
 		void navigator.clipboard.writeText(JSON.stringify(doc(), null, 2));
 		report = 'JSON copied.';
 	}
@@ -243,12 +250,12 @@
 	</MenuChrome>
 	<div class="probe">
 		<aside class="probe-side">
-			<label>Name <input bind:value={name} /></label>
-			<label>Slug <input bind:value={slug} /></label>
-			<label>Seed <input type="number" bind:value={seed} /></label>
+			<label>Name <input bind:value={name} oninput={dirty} /></label>
+			<label>Slug <input bind:value={slug} oninput={dirty} /></label>
+			<label>Seed <input type="number" bind:value={seed} oninput={dirty} /></label>
 			<div class="row">
-				<label>W <input type="number" min="8" max="64" bind:value={w} onchange={resizeGrid} /></label>
-				<label>H <input type="number" min="8" max="48" bind:value={h} onchange={resizeGrid} /></label>
+				<label>W <input type="number" min="8" max="64" bind:value={w} oninput={dirty} onchange={resizeGrid} /></label>
+				<label>H <input type="number" min="8" max="48" bind:value={h} oninput={dirty} onchange={resizeGrid} /></label>
 			</div>
 			<p class="hint">Brush · keys 1–4</p>
 			<div class="brushes">

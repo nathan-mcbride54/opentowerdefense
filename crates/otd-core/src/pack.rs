@@ -837,4 +837,23 @@ mod tests {
         assert!(load.gun(BuildKind::Autocannon).is_none());
         assert!(!load.catalog_items().iter().any(|c| c.id == 2));
     }
+
+    #[test]
+    fn empty_tray_is_rejected() {
+        let guns = (1u8..=10)
+            .map(|id| GunPatch {
+                id,
+                enabled: Some(false),
+                ..Default::default()
+            })
+            .collect();
+        let doc = PackDoc {
+            slug: "none".into(),
+            name: "None".into(),
+            blurb: String::new(),
+            guns,
+            strikes: vec![],
+        };
+        assert!(matches!(Loadout::from_doc(&doc), Err(PackError::EmptyTray)));
+    }
 }

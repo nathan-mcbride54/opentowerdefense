@@ -1,7 +1,7 @@
 {
   "name": "open-tower-defense",
   "private": true,
-  "description": "Open-source maze tower defense. Shape the kill zone. Hold the relay.",
+  "description": "Open-source maze tower defense. Shape the path. Keep the lamp lit.",
   "license": "MIT",
   "scripts": {
     "wasm": "wasm-pack build crates/otd-wasm --dev --target web --out-dir ../../web/src/lib/wasm --out-name otd",
@@ -11,7 +11,7 @@
     "build": "npm run wasm:release && npm --prefix web run build",
     "preview": "npm --prefix web run preview",
     "check": "npm run wasm && npm --prefix web run check",
-    "test": "cargo test -p otd-core",
+    "test": "cargo test --workspace",
     "bench": "cargo run -p otd-bench --"
   }
 }

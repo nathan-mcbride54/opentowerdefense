@@ -216,10 +216,11 @@ fn main() -> ExitCode {
             || map_slug.is_some()
             || mission_id.is_some()
             || challenge_id.is_some()
-            || mod_explicit)
+            || mod_explicit
+            || pack_path.is_some())
     {
         eprintln!(
-            "--orders carries its own map and modifier; drop --map-json/--map/--mod/--mission/--challenge"
+            "--orders carries its own map, modifier and pack; drop --map-json/--map/--mod/--mission/--challenge/--pack"
         );
         return ExitCode::from(2);
     }

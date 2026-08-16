@@ -3276,4 +3276,29 @@ mod tests {
         g.tick_flickers();
         assert!(g.creeps[0].pos.x > start.x + 0.5);
     }
+
+    #[test]
+    fn weaker_slow_does_not_refresh_stronger() {
+        let mut g = tiny();
+        g.spawn_q.clear();
+        g.phase = Phase::Incoming;
+        g.spawn_creep(SpawnOrder {
+            kind: CreepKind::Runner,
+            spawn: (0, 2),
+        });
+        apply_slow(&mut g.creeps[0], 0.42, 3.0);
+        assert_eq!(g.creeps[0].slow_mul, 0.42);
+        apply_slow(&mut g.creeps[0], 0.7, 10.0);
+        assert_eq!(g.creeps[0].slow_mul, 0.42);
+        assert!((g.creeps[0].slow_ttl - 3.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn unknown_map_id_plays_kilo() {
+        let g = Game::start(99, Modifier::Standard, None);
+        assert_eq!(g.snapshot().map_id, 0);
+        assert_eq!(g.snapshot().map_name, "Kilo Outpost");
+        let workshop = Game::start(WORKSHOP_MAP_ID, Modifier::Standard, None);
+        assert_eq!(workshop.snapshot().map_id, 0);
+    }
 }

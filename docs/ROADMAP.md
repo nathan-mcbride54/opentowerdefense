@@ -135,6 +135,19 @@ Holdfast is the 1.0 closer. The planned phases are complete.
 
 Shipped.
 
+## After 1.0 — Lantern Dusk
+
+The 1.0 plan is done. This pass is the first post-ship skin and cleanup.
+
+- Lantern Dusk visual language: near-black surfaces, lantern amber as the single lit accent
+- Two more skirmish theaters: **Mossfold** and **Labyrinth**. Campaign stays eight missions; these two are endless + daily only
+- Inspect panel is draggable so it cannot trap a corner of the field
+- Minimap removed: it sat on real cells, and `cellAt()` refused to build under it
+- Local co-op removed end-to-end (engine, snapshot, wasm, HUD). Single commander
+- `npm run dev:fast` builds release Wasm so performance is not judged on a debug module
+
+Shipped.
+
 ## Non-goals (until someone makes a case)
 
 - Lootboxes, live-service currencies, account walls

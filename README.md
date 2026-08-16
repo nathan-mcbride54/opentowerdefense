@@ -58,7 +58,7 @@ Then open the URL Vite prints (usually `http://localhost:5173`). After changing 
 `npm run dev` builds **debug** Wasm — fast to compile, but several times slower to run. Use `npm run dev:fast` (release Wasm, same dev server) before drawing any conclusion about simulation performance.
 
 ```bash
-npm test              # Rust simulation tests
+npm test              # Rust workspace tests (core, bench, wasm façade)
 npm run check         # Wasm + Svelte/TS
 npm run build         # Release Wasm + static site in web/build
 cargo run -p otd-bench -- --map kilo --until-wave 8

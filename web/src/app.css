@@ -1637,6 +1637,7 @@ kbd {
 .inspect {
 	border-radius: var(--r-3);
 	position: absolute;
+	z-index: 4;
 	right: 0.8rem;
 	top: 0.8rem;
 	width: 16.5rem;

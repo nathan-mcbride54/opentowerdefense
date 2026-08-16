@@ -480,6 +480,7 @@ mod tests {
 
     #[test]
     fn all_theaters_start_open() {
+        assert_eq!(theaters().len(), 10);
         for t in theaters() {
             let (grid, _, _) = theater_by_id(t.id).expect("theater");
             assert_open(grid);

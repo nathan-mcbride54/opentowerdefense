@@ -61,6 +61,30 @@ export interface Session {
 	get speed(): Speed;
 }
 
+/** Built-in skirmish starts must name a real theater and modifier. The engine
+ *  otherwise silently plays Kilo / Standard, which desyncs the URL from the match. */
+function assertLiveCatalog(opts: SessionOpts) {
+	if (
+		opts.replayJson ||
+		opts.mapJson ||
+		opts.missionId != null ||
+		opts.challengeId != null ||
+		opts.utcDay != null
+	) {
+		return;
+	}
+	const theaters = JSON.parse(WasmGame.theaters()) as { id: number }[];
+	const mapId = opts.mapId ?? 0;
+	if (!theaters.some((t) => t.id === mapId)) {
+		throw new Error('Unknown theater.');
+	}
+	const modifiers = JSON.parse(WasmGame.modifiers()) as { id: number }[];
+	const modId = opts.modifierId ?? 0;
+	if (!modifiers.some((m) => m.id === modId)) {
+		throw new Error('Unknown modifier.');
+	}
+}
+
 export async function createSession(
 	canvas: HTMLCanvasElement,
 	onSnap: (snap: Snapshot, extras: SessionExtras) => void,
@@ -68,6 +92,7 @@ export async function createSession(
 ): Promise<Session> {
 	const resolved: SessionOpts = typeof opts === 'number' ? { mapId: opts } : opts;
 	await init();
+	assertLiveCatalog(resolved);
 	const watch = Boolean(resolved.replayJson);
 	const sourceReplay = resolved.replayJson ?? null;
 	const game = resolved.replayJson
