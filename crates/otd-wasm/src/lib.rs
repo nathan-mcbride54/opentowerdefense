@@ -218,12 +218,12 @@ impl WasmGame {
 
     #[wasm_bindgen(js_name = upgradeSelected)]
     pub fn upgrade_selected(&mut self) -> bool {
-        self.inner.upgrade_selected().is_ok()
+        self.inner.upgrade().is_ok()
     }
 
     #[wasm_bindgen(js_name = sellSelected)]
     pub fn sell_selected(&mut self) -> bool {
-        self.inner.sell_selected().is_ok()
+        self.inner.sell().is_ok()
     }
 
     #[wasm_bindgen(js_name = cycleTargeting)]
@@ -233,7 +233,7 @@ impl WasmGame {
 
     #[wasm_bindgen(js_name = convertSelected)]
     pub fn convert_selected(&mut self) -> bool {
-        self.inner.convert_selected().is_ok()
+        self.inner.convert().is_ok()
     }
 
     #[wasm_bindgen(js_name = callWave)]
@@ -241,82 +241,17 @@ impl WasmGame {
         self.inner.call_wave()
     }
 
-    #[wasm_bindgen(js_name = setBuildP)]
-    pub fn set_build_p(&mut self, player: u8, kind: u8) {
-        self.inner.set_build_p(player, kind);
-    }
-
-    #[wasm_bindgen(js_name = setStrikeP)]
-    pub fn set_strike_p(&mut self, player: u8, kind: u8) {
-        self.inner.set_strike_p(player, kind);
-    }
-
-    #[wasm_bindgen(js_name = setHoverP)]
-    pub fn set_hover_p(&mut self, player: u8, x: i32, y: i32) {
-        self.inner.set_hover_p(player, x, y);
-    }
-
-    #[wasm_bindgen(js_name = clearHoverP)]
-    pub fn clear_hover_p(&mut self, player: u8) {
-        self.inner.clear_hover_p(player);
-    }
-
-    #[wasm_bindgen(js_name = cancelP)]
-    pub fn cancel_p(&mut self, player: u8) -> bool {
-        self.inner.cancel_p(player)
-    }
-
-    #[wasm_bindgen(js_name = clickP)]
-    pub fn click_p(&mut self, player: u8, x: i32, y: i32) {
-        self.inner.click_p(player, x, y);
-    }
-
-    #[wasm_bindgen(js_name = upgradeP)]
-    pub fn upgrade_p(&mut self, player: u8) -> bool {
-        self.inner.upgrade_p(player).is_ok()
-    }
-
-    #[wasm_bindgen(js_name = sellP)]
-    pub fn sell_p(&mut self, player: u8) -> bool {
-        self.inner.sell_p(player).is_ok()
-    }
-
-    #[wasm_bindgen(js_name = cycleTargetingP)]
-    pub fn cycle_targeting_p(&mut self, player: u8) -> bool {
-        self.inner.cycle_targeting_p(player)
-    }
-
-    #[wasm_bindgen(js_name = convertP)]
-    pub fn convert_p(&mut self, player: u8) -> bool {
-        self.inner.convert_p(player).is_ok()
-    }
-
     pub fn repair(&mut self) -> bool {
         self.inner.repair().is_ok()
     }
 
-    #[wasm_bindgen(js_name = repairP)]
-    pub fn repair_p(&mut self, player: u8) -> bool {
-        self.inner.repair_p(player).is_ok()
-    }
-
     #[wasm_bindgen(js_name = liftSelected)]
     pub fn lift_selected(&mut self) -> bool {
-        self.inner.lift_selected().is_ok()
-    }
-
-    #[wasm_bindgen(js_name = liftP)]
-    pub fn lift_p(&mut self, player: u8) -> bool {
-        self.inner.lift_p(player).is_ok()
+        self.inner.lift().is_ok()
     }
 
     pub fn overcharge(&mut self) -> bool {
         self.inner.overcharge().is_ok()
-    }
-
-    #[wasm_bindgen(js_name = overchargeP)]
-    pub fn overcharge_p(&mut self, player: u8) -> bool {
-        self.inner.overcharge_p(player).is_ok()
     }
 }
 

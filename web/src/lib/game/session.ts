@@ -1,6 +1,6 @@
 import init, { WasmGame } from '$lib/wasm/otd';
 import { createAudio } from './audio';
-import { actionForKey, normalizeKey, P2_KEYS, type ActionId } from './keys';
+import { actionForKey, normalizeKey, type ActionId } from './keys';
 import { BattlefieldRenderer } from './renderer';
 import { applyUiScale, loadSettings, patchSettings, subscribeSettings } from './settings';
 import {
@@ -30,7 +30,6 @@ export interface SessionOpts {
 	challengeId?: number;
 	seedHex?: string;
 	packJson?: string;
-	coop?: boolean;
 	replayJson?: string;
 }
 
@@ -39,22 +38,21 @@ export interface SessionExtras {
 	speed: Speed;
 	catalog: CatalogItem[];
 	strikes: StrikeItem[];
-	coop: boolean;
 	watch: boolean;
 }
 
 export interface Session {
 	destroy: () => void;
-	setBuild: (id: number, player?: number) => void;
-	setStrike: (id: number, player?: number) => void;
-	upgrade: (player?: number) => void;
-	sell: (player?: number) => void;
+	setBuild: (id: number) => void;
+	setStrike: (id: number) => void;
+	upgrade: () => void;
+	sell: () => void;
 	callWave: () => void;
-	cycleTargeting: (player?: number) => void;
-	convert: (player?: number) => void;
-	repair: (player?: number) => void;
-	lift: (player?: number) => void;
-	overcharge: (player?: number) => void;
+	cycleTargeting: () => void;
+	convert: () => void;
+	repair: () => void;
+	lift: () => void;
+	overcharge: () => void;
 	togglePause: () => void;
 	cycleSpeed: () => void;
 	resetView: () => void;
@@ -93,10 +91,6 @@ export async function createSession(
 	const map = JSON.parse(game.mapStatic()) as MapStatic;
 	const renderer = new BattlefieldRenderer(canvas);
 	renderer.setMap(map);
-	const coop = Boolean(resolved.coop) && !watch;
-	const core = map.core[0];
-	let p2x = core ? Math.floor(core[0]) : Math.floor(map.w / 2);
-	let p2y = core ? Math.floor(core[1]) : Math.floor(map.h / 2);
 
 	let settings = loadSettings();
 	applyUiScale(settings.uiScale);
@@ -122,11 +116,10 @@ export async function createSession(
 	let panned = false;
 	let pinch0: { dist: number; zoomMidX: number; zoomMidY: number } | null = null;
 	let lastPaint: { x: number; y: number } | null = null;
-	let p2Paint = false;
 	let handBuild = 0;
 	let handStrike = 0;
 
-	const extras = (): SessionExtras => ({ paused, speed, catalog, strikes, coop, watch });
+	const extras = (): SessionExtras => ({ paused, speed, catalog, strikes, watch });
 
 	const emit = (snap: Snapshot) => {
 		audio.onSnap(lastSnap, snap);
@@ -157,7 +150,6 @@ export async function createSession(
 			}
 			if (steps === MAX_STEPS) acc = 0;
 		}
-		if (coop) game.setHoverP(1, p2x, p2y);
 		renderer.setLook(settings.palette, settings.reducedFx);
 		// While paused nothing in the sim moves, so re-parsing a ~20KB snapshot and
 		// re-emitting it (which invalidates the whole HUD) 60x/second is pure waste.
@@ -315,7 +307,7 @@ export async function createSession(
 		speed = SPEED_STEPS[(i + 1) % SPEED_STEPS.length];
 	};
 
-	const runAction = (id: ActionId, player = 0) => {
+	const runAction = (id: ActionId) => {
 		viewDirty = true;
 		if (watch && id !== 'pause' && id !== 'speed' && id !== 'mute' && id !== 'viewReset') {
 			if (id === 'cancel') {
@@ -324,7 +316,6 @@ export async function createSession(
 			}
 			return;
 		}
-		const p = player === 1 ? 1 : 0;
 		switch (id) {
 			case 'build1':
 			case 'build2':
@@ -336,65 +327,53 @@ export async function createSession(
 			case 'build8':
 			case 'build9': {
 				const n = Number(id.slice(5));
-				game.setBuildP(p, n);
-				if (p === 0) {
-					handBuild = n;
-					handStrike = 0;
-				}
+				game.setBuild(n);
+				handBuild = n;
+				handStrike = 0;
 				break;
 			}
 			case 'build10':
-				game.setBuildP(p, 10);
-				if (p === 0) {
-					handBuild = 10;
-					handStrike = 0;
-				}
+				game.setBuild(10);
+				handBuild = 10;
+				handStrike = 0;
 				break;
 			case 'strike1':
-				game.setStrikeP(p, 1);
-				if (p === 0) {
-					handStrike = 1;
-					handBuild = 0;
-				}
+				game.setStrike(1);
+				handStrike = 1;
+				handBuild = 0;
 				break;
 			case 'strike2':
-				game.setStrikeP(p, 2);
-				if (p === 0) {
-					handStrike = 2;
-					handBuild = 0;
-				}
+				game.setStrike(2);
+				handStrike = 2;
+				handBuild = 0;
 				break;
 			case 'strike3':
-				game.setStrikeP(p, 3);
-				if (p === 0) {
-					handStrike = 3;
-					handBuild = 0;
-				}
+				game.setStrike(3);
+				handStrike = 3;
+				handBuild = 0;
 				break;
 			case 'upgrade':
-				game.upgradeP(p);
+				game.upgradeSelected();
 				break;
 			case 'sell':
-				game.sellP(p);
+				game.sellSelected();
 				break;
 			case 'target':
-				game.cycleTargetingP(p);
+				game.cycleTargeting();
 				break;
 			case 'convert':
-				game.convertP(p);
+				game.convertSelected();
 				break;
 			case 'repair':
-				game.repairP(p);
+				game.repair();
 				break;
 			case 'move':
-				game.liftP(p);
-				if (p === 0) {
-					handBuild = 0;
-					handStrike = 0;
-				}
+				game.liftSelected();
+				handBuild = 0;
+				handStrike = 0;
 				break;
 			case 'overcharge':
-				game.overchargeP(p);
+				game.overcharge();
 				break;
 			case 'call':
 				game.callWave();
@@ -409,11 +388,9 @@ export async function createSession(
 				patchSettings({ mute: !loadSettings().mute });
 				break;
 			case 'cancel':
-				if (!game.cancelP(p)) paused = !paused;
-				if (p === 0) {
-					handBuild = 0;
-					handStrike = 0;
-				}
+				if (!game.cancel()) paused = !paused;
+				handBuild = 0;
+				handStrike = 0;
 				break;
 			case 'viewReset':
 				renderer.resetView();
@@ -442,41 +419,7 @@ export async function createSession(
 		const focusedControl =
 			el instanceof Element ? el.closest('button, a, summary, [role="button"]') : null;
 		if ((key === 'space' || key === 'enter') && focusedControl) return;
-		// P1 binds win when a key is on both maps, so resolve P1 before the P2 cursor keys.
 		const p1Early = actionForKey(settings.keys, key);
-		if (coop && !p1Early) {
-			if (ev.repeat && key === 'enter') return;
-			if (key === 'arrowup') {
-				p2y = Math.max(0, p2y - 1);
-				if (p2Paint) game.clickP(1, p2x, p2y);
-				ev.preventDefault();
-				return;
-			}
-			if (key === 'arrowdown') {
-				p2y = Math.min(map.h - 1, p2y + 1);
-				if (p2Paint) game.clickP(1, p2x, p2y);
-				ev.preventDefault();
-				return;
-			}
-			if (key === 'arrowleft') {
-				p2x = Math.max(0, p2x - 1);
-				if (p2Paint) game.clickP(1, p2x, p2y);
-				ev.preventDefault();
-				return;
-			}
-			if (key === 'arrowright') {
-				p2x = Math.min(map.w - 1, p2x + 1);
-				if (p2Paint) game.clickP(1, p2x, p2y);
-				ev.preventDefault();
-				return;
-			}
-			if (key === 'enter') {
-				p2Paint = true;
-				game.clickP(1, p2x, p2y);
-				ev.preventDefault();
-				return;
-			}
-		}
 		// Auto-repeat must not reach any bind. Pause is bound to Space by default, so the
 		// old `ev.key !== ' '` exemption made holding Space strobe pause at the repeat rate.
 		if (ev.repeat) return;
@@ -486,22 +429,11 @@ export async function createSession(
 			ev.preventDefault();
 			return;
 		}
-		if (coop) {
-			const p2 = actionForKey(P2_KEYS, key);
-			if (p2 && p2 !== 'pause' && p2 !== 'speed' && p2 !== 'mute' && p2 !== 'viewReset') {
-				runAction(p2, 1);
-				ev.preventDefault();
-			}
-		}
 	};
 
-	const onKeyUp = (ev: KeyboardEvent) => {
-		if (normalizeKey(ev) === 'enter') p2Paint = false;
-	};
 
 	// A key held while the window loses focus never delivers its keyup, so drop held state.
 	const onBlur = () => {
-		p2Paint = false;
 		pointers.clear();
 		pinch0 = null;
 		panned = false;
@@ -516,7 +448,6 @@ export async function createSession(
 	canvas.addEventListener('contextmenu', onContext);
 	canvas.addEventListener('wheel', onWheel, { passive: false });
 	window.addEventListener('keydown', onKeyDown);
-	window.addEventListener('keyup', onKeyUp);
 	window.addEventListener('blur', onBlur);
 	window.addEventListener('pointerdown', unlock);
 	window.addEventListener('keydown', unlock);
@@ -541,73 +472,66 @@ export async function createSession(
 			canvas.removeEventListener('contextmenu', onContext);
 			canvas.removeEventListener('wheel', onWheel);
 			window.removeEventListener('keydown', onKeyDown);
-			window.removeEventListener('keyup', onKeyUp);
 			window.removeEventListener('blur', onBlur);
 			window.removeEventListener('pointerdown', unlock);
 			window.removeEventListener('keydown', unlock);
 			game.free();
 		},
-		setBuild(id: number, player = 0) {
+		setBuild(id: number) {
 			viewDirty = true;
 			if (watch) return;
-			game.setBuildP(player === 1 ? 1 : 0, id);
-			if (player !== 1) {
-				handBuild = id;
-				if (id > 0) handStrike = 0;
-			}
+			game.setBuild(id);
+			handBuild = id;
+			if (id > 0) handStrike = 0;
 		},
-		setStrike(id: number, player = 0) {
+		setStrike(id: number) {
 			viewDirty = true;
 			if (watch) return;
-			game.setStrikeP(player === 1 ? 1 : 0, id);
-			if (player !== 1) {
-				handStrike = id;
-				if (id > 0) handBuild = 0;
-			}
+			game.setStrike(id);
+			handStrike = id;
+			if (id > 0) handBuild = 0;
 		},
-		upgrade(player = 0) {
+		upgrade() {
 			viewDirty = true;
 			if (watch) return;
-			game.upgradeP(player === 1 ? 1 : 0);
+			game.upgradeSelected();
 		},
-		sell(player = 0) {
+		sell() {
 			viewDirty = true;
 			if (watch) return;
-			game.sellP(player === 1 ? 1 : 0);
+			game.sellSelected();
 		},
 		callWave() {
 			viewDirty = true;
 			if (watch) return;
 			game.callWave();
 		},
-		cycleTargeting(player = 0) {
+		cycleTargeting() {
 			viewDirty = true;
 			if (watch) return;
-			game.cycleTargetingP(player === 1 ? 1 : 0);
+			game.cycleTargeting();
 		},
-		convert(player = 0) {
+		convert() {
 			viewDirty = true;
 			if (watch) return;
-			game.convertP(player === 1 ? 1 : 0);
+			game.convertSelected();
 		},
-		repair(player = 0) {
+		repair() {
 			viewDirty = true;
 			if (watch) return;
-			game.repairP(player === 1 ? 1 : 0);
+			game.repair();
 		},
-		lift(player = 0) {
+		lift() {
 			viewDirty = true;
 			if (watch) return;
-			game.liftP(player === 1 ? 1 : 0);
-			if (player !== 1) {
-				handBuild = 0;
-				handStrike = 0;
-			}
+			game.liftSelected();
+			handBuild = 0;
+			handStrike = 0;
 		},
-		overcharge(player = 0) {
+		overcharge() {
 			viewDirty = true;
 			if (watch) return;
-			game.overchargeP(player === 1 ? 1 : 0);
+			game.overcharge();
 		},
 		togglePause() {
 			viewDirty = true;

@@ -167,14 +167,6 @@ impl Hand {
     }
 }
 
-fn slot(player: u8) -> usize {
-    if player == 1 {
-        1
-    } else {
-        0
-    }
-}
-
 pub struct Game {
     grid: Grid,
     flow: FlowField,
@@ -202,7 +194,7 @@ pub struct Game {
     phase: Phase,
     time: f32,
     tick: u64,
-    hands: [Hand; 2],
+    hand: Hand,
     strike_cd: [f32; 4],
     banner: Option<(String, f32)>,
     message: Option<(String, f32)>,
@@ -400,7 +392,7 @@ impl Game {
             },
             time: 0.0,
             tick: 0,
-            hands: [Hand::fresh(), Hand::fresh()],
+            hand: Hand::fresh(),
             strike_cd: [0.0; 4],
             banner: Some((modifier.opening_banner().into(), 3.2)),
             message: None,
@@ -473,27 +465,17 @@ impl Game {
     }
 
     fn note(&mut self, op: OrderOp) {
-        self.note_p(0, op);
-    }
-
-    fn note_p(&mut self, player: u8, op: OrderOp) {
         if self.recording {
             self.orders.push(Order {
                 tick: self.tick,
-                player,
                 op,
             });
         }
     }
 
     pub fn set_build(&mut self, kind: u8) {
-        self.set_build_p(0, kind);
-    }
-
-    pub fn set_build_p(&mut self, player: u8, kind: u8) {
-        self.note_p(player, OrderOp::SetBuild { kind });
-        let i = slot(player);
-        let hand = &mut self.hands[i];
+        self.note(OrderOp::SetBuild { kind });
+        let hand = &mut self.hand;
         hand.build = BuildKind::from_u8(kind);
         hand.lift = None;
         if hand.build.is_structure() {
@@ -503,13 +485,8 @@ impl Game {
     }
 
     pub fn set_strike(&mut self, kind: u8) {
-        self.set_strike_p(0, kind);
-    }
-
-    pub fn set_strike_p(&mut self, player: u8, kind: u8) {
-        self.note_p(player, OrderOp::SetStrike { kind });
-        let i = slot(player);
-        let hand = &mut self.hands[i];
+        self.note(OrderOp::SetStrike { kind });
+        let hand = &mut self.hand;
         hand.strike = StrikeKind::from_u8(kind);
         if hand.strike != StrikeKind::None {
             hand.build = BuildKind::Inspect;
@@ -519,33 +496,21 @@ impl Game {
     }
 
     pub fn set_hover(&mut self, x: i32, y: i32) {
-        self.set_hover_p(0, x, y);
-    }
-
-    pub fn set_hover_p(&mut self, player: u8, x: i32, y: i32) {
         let hover = if self.grid.in_bounds(x, y) {
             Some((x, y))
         } else {
             None
         };
-        self.hands[slot(player)].hover = hover;
+        self.hand.hover = hover;
     }
 
     pub fn clear_hover(&mut self) {
-        self.clear_hover_p(0);
-    }
-
-    pub fn clear_hover_p(&mut self, player: u8) {
-        self.hands[slot(player)].hover = None;
+        self.hand.hover = None;
     }
 
     pub fn cancel(&mut self) -> bool {
-        self.cancel_p(0)
-    }
-
-    pub fn cancel_p(&mut self, player: u8) -> bool {
-        self.note_p(player, OrderOp::Cancel);
-        let hand = &mut self.hands[slot(player)];
+        self.note(OrderOp::Cancel);
+        let hand = &mut self.hand;
         let busy = hand.build.is_structure()
             || hand.strike != StrikeKind::None
             || hand.selected.is_some()
@@ -555,43 +520,38 @@ impl Game {
     }
 
     pub fn click(&mut self, x: i32, y: i32) {
-        self.click_p(0, x, y);
-    }
-
-    pub fn click_p(&mut self, player: u8, x: i32, y: i32) {
-        self.note_p(player, OrderOp::Click { x, y });
-        let i = slot(player);
+        self.note(OrderOp::Click { x, y });
         if !self.grid.in_bounds(x, y) {
-            self.hands[i].selected = None;
+            self.hand.selected = None;
             return;
         }
-        if self.hands[i].lift.is_some() {
-            let id = self.hands[i].lift.unwrap();
+        if self.hand.lift.is_some() {
+            let id = self.hand.lift.unwrap();
             match self.relocate(id, x, y) {
-                Ok(()) => self.hands[slot(player)].lift = None,
+                Ok(()) => self.hand.lift = None,
                 Err(err) => {
                     if err == PlaceError::NothingToMove {
-                        self.hands[slot(player)].lift = None;
+                        self.hand.lift = None;
                     }
                     self.toast(err.message());
                 }
             }
             return;
         }
-        if self.hands[i].strike != StrikeKind::None {
-            let kind = self.hands[i].strike;
+        if self.hand.strike != StrikeKind::None {
+            let kind = self.hand.strike;
             self.fire_strike_kind(kind, x, y);
             return;
         }
-        if self.hands[i].build.is_structure() {
-            let kind = self.hands[i].build;
-            match self.place_for(player, x, y, kind) {
+        if self.hand.build.is_structure() {
+            let kind = self.hand.build;
+            match self.place_for(x, y, kind) {
                 Ok(()) => {}
                 Err(err) => self.toast(err.message()),
             }
             return;
         }
-        self.hands[i].selected = match self.grid.occupant(x, y) {
+        self.hand.selected = match self.grid.occupant(x, y) {
             Occupant::Tower(id) => Some(id),
             Occupant::Wall => wall_id_at(&self.towers, x, y),
             Occupant::None => None,
@@ -599,10 +559,10 @@ impl Game {
     }
 
     pub fn place(&mut self, x: i32, y: i32, kind: BuildKind) -> Result<(), PlaceError> {
-        self.place_for(0, x, y, kind)
+        self.place_for(x, y, kind)
     }
 
-    fn place_for(&mut self, player: u8, x: i32, y: i32, kind: BuildKind) -> Result<(), PlaceError> {
+    fn place_for(&mut self, x: i32, y: i32, kind: BuildKind) -> Result<(), PlaceError> {
         if matches!(self.phase, Phase::Defeat) {
             return Err(PlaceError::Occupied);
         }
@@ -674,7 +634,7 @@ impl Game {
             overcharge_ttl: 0.0,
         });
         self.flow = flow;
-        self.hands[slot(player)].selected = Some(id);
+        self.hand.selected = Some(id);
         self.push_fx("place", Grid::cell_center(x, y), 0.28, 1.0, 0.0);
         Ok(())
     }
@@ -692,15 +652,9 @@ impl Game {
             })
     }
 
-    pub fn upgrade_selected(&mut self) -> Result<(), PlaceError> {
-        self.upgrade_p(0)
-    }
-
-    pub fn upgrade_p(&mut self, player: u8) -> Result<(), PlaceError> {
-        self.note_p(player, OrderOp::Upgrade);
-        let id = self.hands[slot(player)]
-            .selected
-            .ok_or(PlaceError::NotATurret)?;
+    pub fn upgrade(&mut self) -> Result<(), PlaceError> {
+        self.note(OrderOp::Upgrade);
+        let id = self.hand.selected.ok_or(PlaceError::NotATurret)?;
         let idx = self
             .towers
             .iter()
@@ -730,15 +684,9 @@ impl Game {
         Ok(())
     }
 
-    pub fn sell_selected(&mut self) -> Result<(), PlaceError> {
-        self.sell_p(0)
-    }
-
-    pub fn sell_p(&mut self, player: u8) -> Result<(), PlaceError> {
-        self.note_p(player, OrderOp::Sell);
-        let id = self.hands[slot(player)]
-            .selected
-            .ok_or(PlaceError::NotATurret)?;
+    pub fn sell(&mut self) -> Result<(), PlaceError> {
+        self.note(OrderOp::Sell);
+        let id = self.hand.selected.ok_or(PlaceError::NotATurret)?;
         let idx = self
             .towers
             .iter()
@@ -749,7 +697,8 @@ impl Game {
         self.credits += refund;
         self.grid.set_occ(t.x, t.y, Occupant::None);
         self.recompute_flow();
-        for hand in &mut self.hands {
+        {
+            let hand = &mut self.hand;
             if hand.selected == Some(id) {
                 hand.selected = None;
             }
@@ -762,12 +711,8 @@ impl Game {
     }
 
     pub fn cycle_targeting(&mut self) -> bool {
-        self.cycle_targeting_p(0)
-    }
-
-    pub fn cycle_targeting_p(&mut self, player: u8) -> bool {
-        self.note_p(player, OrderOp::Target);
-        let id = match self.hands[slot(player)].selected {
+        self.note(OrderOp::Target);
+        let id = match self.hand.selected {
             Some(id) => id,
             None => return false,
         };
@@ -788,15 +733,9 @@ impl Game {
         true
     }
 
-    pub fn convert_selected(&mut self) -> Result<(), PlaceError> {
-        self.convert_p(0)
-    }
-
-    pub fn convert_p(&mut self, player: u8) -> Result<(), PlaceError> {
-        self.note_p(player, OrderOp::Convert);
-        let id = self.hands[slot(player)]
-            .selected
-            .ok_or(PlaceError::NotHelios)?;
+    pub fn convert(&mut self) -> Result<(), PlaceError> {
+        self.note(OrderOp::Convert);
+        let id = self.hand.selected.ok_or(PlaceError::NotHelios)?;
         let idx = self
             .towers
             .iter()
@@ -823,11 +762,7 @@ impl Game {
     }
 
     pub fn repair(&mut self) -> Result<(), PlaceError> {
-        self.repair_p(0)
-    }
-
-    pub fn repair_p(&mut self, player: u8) -> Result<(), PlaceError> {
-        self.note_p(player, OrderOp::Repair);
+        self.note(OrderOp::Repair);
         if matches!(self.phase, Phase::Defeat) || self.integrity <= 0 {
             self.toast(PlaceError::RelayDown.message());
             return Err(PlaceError::RelayDown);
@@ -847,38 +782,27 @@ impl Game {
         Ok(())
     }
 
-    pub fn lift_selected(&mut self) -> Result<(), PlaceError> {
-        self.lift_p(0)
-    }
-
-    pub fn lift_p(&mut self, player: u8) -> Result<(), PlaceError> {
-        self.note_p(player, OrderOp::Lift);
-        let i = slot(player);
-        if self.hands[i].lift.is_some() {
-            self.hands[i].lift = None;
+    pub fn lift(&mut self) -> Result<(), PlaceError> {
+        self.note(OrderOp::Lift);
+        if self.hand.lift.is_some() {
+            self.hand.lift = None;
             self.toast("Move cancelled");
             return Ok(());
         }
-        let id = self.hands[i].selected.ok_or(PlaceError::NothingToMove)?;
+        let id = self.hand.selected.ok_or(PlaceError::NothingToMove)?;
         if !self.towers.iter().any(|t| t.id == id) {
             return Err(PlaceError::NothingToMove);
         }
-        self.hands[i].build = BuildKind::Inspect;
-        self.hands[i].strike = StrikeKind::None;
-        self.hands[i].lift = Some(id);
+        self.hand.build = BuildKind::Inspect;
+        self.hand.strike = StrikeKind::None;
+        self.hand.lift = Some(id);
         self.toast("Click a cell to move");
         Ok(())
     }
 
     pub fn overcharge(&mut self) -> Result<(), PlaceError> {
-        self.overcharge_p(0)
-    }
-
-    pub fn overcharge_p(&mut self, player: u8) -> Result<(), PlaceError> {
-        self.note_p(player, OrderOp::Overcharge);
-        let id = self.hands[slot(player)]
-            .selected
-            .ok_or(PlaceError::NotATurret)?;
+        self.note(OrderOp::Overcharge);
+        let id = self.hand.selected.ok_or(PlaceError::NotATurret)?;
         let idx = self
             .towers
             .iter()
@@ -970,7 +894,7 @@ impl Game {
     }
 
     pub fn fire_strike(&mut self, x: i32, y: i32) -> bool {
-        self.fire_strike_kind(self.hands[0].strike, x, y)
+        self.fire_strike_kind(self.hand.strike, x, y)
     }
 
     fn fire_strike_kind(&mut self, kind: StrikeKind, x: i32, y: i32) -> bool {
@@ -1861,16 +1785,16 @@ impl Game {
             banner_life: self.banner.as_ref().map(|(_, t)| *t).unwrap_or(0.0),
             message: self.message.as_ref().map(|(s, _)| s.clone()),
             hurt_flash: self.hurt_flash,
-            build: self.hands[0].build as u8,
-            strike: self.hands[0].strike as u8,
+            build: self.hand.build as u8,
+            strike: self.hand.strike as u8,
             map_id: self.map_id,
             map_name: self.map_name.clone(),
             modifier_id: self.modifier.id(),
             modifier_name: self.modifier.name().to_string(),
             turret_count: self.turret_count(),
             turret_cap: self.rules().turret_cap,
-            hover: self.hover_info_for(0),
-            selected: self.selected_info_for(0),
+            hover: self.hover_info(),
+            selected: self.selected_info(),
             strikes: self
                 .loadout
                 .strike_items()
@@ -1970,10 +1894,6 @@ impl Game {
             mission_name: self.mission_name.clone(),
             seed_hex: format!("{:016x}", self.seed),
             pack_name: self.pack.as_ref().map(|p| p.name.clone()),
-            build2: self.hands[1].build as u8,
-            strike2: self.hands[1].strike as u8,
-            hover2: self.hover_info_for(1),
-            selected2: self.selected_info_for(1),
             wave_intel: self.wave_intel(),
             after: self.after_action(),
             interest_paid: self.last_interest,
@@ -1982,8 +1902,7 @@ impl Game {
             repair_cost: REPAIR_COST,
             overcharge_cost: OVERCHARGE_COST,
             walk: self.flow.max_spawn_dist(&self.grid),
-            relocating: self.hands[0].lift.is_some(),
-            relocating2: self.hands[1].lift.is_some(),
+            relocating: self.hand.lift.is_some(),
             walk_paths: self.flow.spawn_paths_ref().to_vec(),
         }
     }
@@ -2020,8 +1939,8 @@ impl Game {
         }
     }
 
-    fn hover_info_for(&self, player: u8) -> Option<HoverInfo> {
-        let hand = self.hands[slot(player)];
+    fn hover_info(&self) -> Option<HoverInfo> {
+        let hand = self.hand;
         let (x, y) = hand.hover?;
         if !self.grid.in_bounds(x, y) {
             return None;
@@ -2228,8 +2147,8 @@ impl Game {
         Ok(flow.max_spawn_dist(&grid))
     }
 
-    fn selected_info_for(&self, player: u8) -> Option<SelectedInfo> {
-        let id = self.hands[slot(player)].selected?;
+    fn selected_info(&self) -> Option<SelectedInfo> {
+        let id = self.hand.selected?;
         let t = self.towers.iter().find(|t| t.id == id)?;
         let mut stats = self
             .loadout
@@ -2354,37 +2273,36 @@ impl Game {
     pub fn apply_order(&mut self, order: &Order) {
         let rec = self.recording;
         self.recording = false;
-        let p = order.player;
         match &order.op {
-            OrderOp::SetBuild { kind } => self.set_build_p(p, *kind),
-            OrderOp::SetStrike { kind } => self.set_strike_p(p, *kind),
-            OrderOp::Click { x, y } => self.click_p(p, *x, *y),
+            OrderOp::SetBuild { kind } => self.set_build(*kind),
+            OrderOp::SetStrike { kind } => self.set_strike(*kind),
+            OrderOp::Click { x, y } => self.click(*x, *y),
             OrderOp::Cancel => {
-                let _ = self.cancel_p(p);
+                let _ = self.cancel();
             }
             OrderOp::Upgrade => {
-                let _ = self.upgrade_p(p);
+                let _ = self.upgrade();
             }
             OrderOp::Sell => {
-                let _ = self.sell_p(p);
+                let _ = self.sell();
             }
             OrderOp::Call => {
                 let _ = self.call_wave();
             }
             OrderOp::Target => {
-                let _ = self.cycle_targeting_p(p);
+                let _ = self.cycle_targeting();
             }
             OrderOp::Convert => {
-                let _ = self.convert_p(p);
+                let _ = self.convert();
             }
             OrderOp::Repair => {
-                let _ = self.repair_p(p);
+                let _ = self.repair();
             }
             OrderOp::Lift => {
-                let _ = self.lift_p(p);
+                let _ = self.lift();
             }
             OrderOp::Overcharge => {
-                let _ = self.overcharge_p(p);
+                let _ = self.overcharge();
             }
         }
         self.recording = rec;
@@ -2691,8 +2609,8 @@ mod tests {
         g.credits = 50;
         g.place(3, 2, BuildKind::Barricade).unwrap();
         assert_eq!(g.credits, 42);
-        g.hands[0].selected = g.towers.last().map(|t| t.id);
-        g.sell_selected().unwrap();
+        g.hand.selected = g.towers.last().map(|t| t.id);
+        g.sell().unwrap();
         assert!(g.credits > 42);
         assert!(g.grid.buildable(3, 2));
     }
@@ -2750,7 +2668,7 @@ mod tests {
         g.credits = 50;
         g.place(3, 1, BuildKind::Autocannon).unwrap();
         g.credits = 0;
-        let err = g.upgrade_selected().unwrap_err();
+        let err = g.upgrade().unwrap_err();
         assert_eq!(err, PlaceError::CantAfford);
     }
 
@@ -2784,7 +2702,7 @@ mod tests {
             spawn: (0, 2),
         });
         g.creeps[0].pos = Vec2::new(5.5, 2.5);
-        g.hands[0].strike = StrikeKind::Satchel;
+        g.hand.strike = StrikeKind::Satchel;
         assert!(g.fire_strike(5, 2));
         assert!(g.credits < 200);
         g.reap_creeps();
@@ -2796,9 +2714,9 @@ mod tests {
         let mut g = tiny();
         g.credits = 999;
         g.place(4, 1, BuildKind::Helios).unwrap();
-        g.convert_selected().unwrap();
+        g.convert().unwrap();
         assert!(g.towers[0].air_focus);
-        assert_eq!(g.convert_selected().unwrap_err(), PlaceError::AlreadyAir);
+        assert_eq!(g.convert().unwrap_err(), PlaceError::AlreadyAir);
     }
 
     #[test]
@@ -2807,10 +2725,10 @@ mod tests {
         g.credits = 50_000;
         g.place(3, 1, BuildKind::Autocannon).unwrap();
         for _ in 0..3 {
-            g.upgrade_selected().unwrap();
+            g.upgrade().unwrap();
         }
         assert_eq!(g.towers[0].tier, 3);
-        assert_eq!(g.upgrade_selected().unwrap_err(), PlaceError::MaxTier);
+        assert_eq!(g.upgrade().unwrap_err(), PlaceError::MaxTier);
     }
 
     #[test]
@@ -3017,36 +2935,6 @@ mod tests {
         assert!(bundle.pack.is_some());
         let stock_hash = tiny().replay_bundle();
         assert_ne!(crate::replay_hash(&bundle), crate::replay_hash(&stock_hash));
-        let report = crate::verify_replay(bundle);
-        assert!(report.ok, "{:?}", report.error);
-    }
-
-    #[test]
-    fn two_commanders_share_scrap() {
-        let mut g = tiny();
-        g.credits = 200;
-        g.set_build_p(0, BuildKind::Barricade as u8);
-        g.click_p(0, 3, 1);
-        g.set_build_p(1, BuildKind::Autocannon as u8);
-        g.click_p(1, 4, 3);
-        assert_eq!(g.towers.len(), 2);
-        assert_eq!(g.credits, 200 - 8 - 50);
-        assert_eq!(
-            g.hands[0].selected,
-            g.towers
-                .iter()
-                .find(|t| t.kind == BuildKind::Barricade)
-                .map(|t| t.id)
-        );
-        assert_eq!(
-            g.hands[1].selected,
-            g.towers
-                .iter()
-                .find(|t| t.kind == BuildKind::Autocannon)
-                .map(|t| t.id)
-        );
-        let bundle = g.replay_bundle();
-        assert!(bundle.orders.iter().any(|o| o.player == 1));
         let report = crate::verify_replay(bundle);
         assert!(report.ok, "{:?}", report.error);
     }
@@ -3264,15 +3152,15 @@ mod tests {
         g.credits = 100;
         g.place(3, 2, BuildKind::Barricade).unwrap();
         let id = g.towers.last().unwrap().id;
-        g.hands[0].selected = Some(id);
-        g.lift_selected().unwrap();
-        assert!(g.hands[0].lift.is_some());
+        g.hand.selected = Some(id);
+        g.lift().unwrap();
+        assert!(g.hand.lift.is_some());
         g.click(3, 1);
         assert_eq!(g.towers.last().unwrap().x, 3);
         assert_eq!(g.towers.last().unwrap().y, 1);
         assert!(g.grid.buildable(3, 2));
         assert_eq!(g.credits, 100 - 8 - MOVE_COST);
-        assert!(g.hands[0].lift.is_none());
+        assert!(g.hand.lift.is_none());
     }
 
     #[test]
@@ -3281,13 +3169,13 @@ mod tests {
         g.credits = 100;
         g.place(3, 2, BuildKind::Barricade).unwrap();
         let id = g.towers.last().unwrap().id;
-        g.hands[0].selected = Some(id);
-        g.lift_selected().unwrap();
-        g.sell_selected().unwrap();
-        assert!(g.hands[0].lift.is_none());
+        g.hand.selected = Some(id);
+        g.lift().unwrap();
+        g.sell().unwrap();
+        assert!(g.hand.lift.is_none());
         assert!(!g.snapshot().relocating);
         g.click(5, 1);
-        assert!(g.hands[0].selected.is_none());
+        assert!(g.hand.selected.is_none());
         assert!(g.towers.is_empty());
     }
 
@@ -3354,7 +3242,7 @@ mod tests {
         g.credits = 200;
         g.place(3, 2, BuildKind::Autocannon).unwrap();
         let id = g.towers.last().unwrap().id;
-        g.hands[0].selected = Some(id);
+        g.hand.selected = Some(id);
         g.overcharge().unwrap();
         assert!(g.towers.last().unwrap().overcharge_ttl > 0.0);
         assert_eq!(g.credits, 200 - 50 - OVERCHARGE_COST);
@@ -3364,7 +3252,7 @@ mod tests {
             .iter()
             .any(|o| matches!(o.op, OrderOp::Overcharge)));
         g.place(4, 1, BuildKind::Barricade).unwrap();
-        g.hands[0].selected = g
+        g.hand.selected = g
             .towers
             .iter()
             .find(|t| t.kind == BuildKind::Barricade)

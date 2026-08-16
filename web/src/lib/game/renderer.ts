@@ -263,9 +263,8 @@ export class BattlefieldRenderer {
 		this.drawWalls(snap.walls);
 		this.drawWalk(snap.walkPaths);
 		this.drawRange(snap);
-		this.drawHoverHand(snap.hover, snap.build, snap.strike, false);
-		this.drawHoverHand(snap.hover2, snap.build2, snap.strike2, true);
-		this.drawTowers(snap.towers, snap.selected?.id ?? null, snap.selected2?.id ?? null);
+		this.drawHoverHand(snap.hover, snap.build, snap.strike);
+		this.drawTowers(snap.towers, snap.selected?.id ?? null);
 		for (const c of snap.creeps) {
 			if (!c.flying) this.drawCreep(c);
 		}
@@ -420,8 +419,7 @@ export class BattlefieldRenderer {
 	private drawHoverHand(
 		h: Snapshot['hover'],
 		build: number,
-		strike: number,
-		p2: boolean
+		strike: number
 	) {
 		if (!h) return;
 		const { ctx } = this;
@@ -429,40 +427,25 @@ export class BattlefieldRenderer {
 			ctx.beginPath();
 			ctx.arc(h.x + 0.5, h.y + 0.5, Math.max(0.4, h.range), 0, Math.PI * 2);
 			ctx.fillStyle = h.valid
-				? p2
-					? 'rgba(169, 140, 240, 0.2)'
-					: 'rgba(240, 169, 76, 0.18)'
+				? 'rgba(240, 169, 76, 0.18)'
 				: 'rgba(220, 70, 60, 0.16)';
 			ctx.fill();
 			ctx.strokeStyle = h.valid
-				? p2
-					? 'rgba(169, 140, 240, 0.85)'
-					: 'rgba(240, 169, 76, 0.7)'
+				? 'rgba(240, 169, 76, 0.7)'
 				: this.cols.invalid;
 			ctx.lineWidth = 0.06;
 			ctx.stroke();
 			return;
 		}
 		if (build === 0) {
-			if (p2) {
-				ctx.fillStyle = 'rgba(169, 140, 240, 0.12)';
-				ctx.fillRect(h.x, h.y, 1, 1);
-				ctx.strokeStyle = 'rgba(169, 140, 240, 0.9)';
-				ctx.lineWidth = 0.08;
-				ctx.strokeRect(h.x + 0.08, h.y + 0.08, 0.84, 0.84);
-			}
 			return;
 		}
 		ctx.fillStyle = h.valid
-			? p2
-				? 'rgba(169, 140, 240, 0.16)'
-				: 'rgba(180, 200, 70, 0.16)'
+			? 'rgba(180, 200, 70, 0.16)'
 			: 'rgba(220, 70, 60, 0.16)';
 		ctx.fillRect(h.x, h.y, 1, 1);
 		ctx.strokeStyle = h.valid
-			? p2
-				? 'rgba(169, 140, 240, 0.9)'
-				: this.cols.valid
+			? this.cols.valid
 			: this.cols.invalid;
 		ctx.lineWidth = 0.09;
 		ctx.strokeRect(h.x + 0.04, h.y + 0.04, 0.92, 0.92);
@@ -508,12 +491,7 @@ export class BattlefieldRenderer {
 
 	private drawRange(snap: Snapshot) {
 		this.paintRangeRing(
-			this.rangeFrom(snap.selected, snap.hover, snap.build, snap.strike, snap.relocating),
-			false
-		);
-		this.paintRangeRing(
-			this.rangeFrom(snap.selected2, snap.hover2, snap.build2, snap.strike2, snap.relocating2),
-			true
+			this.rangeFrom(snap.selected, snap.hover, snap.build, snap.strike, snap.relocating)
 		);
 	}
 
@@ -552,20 +530,12 @@ export class BattlefieldRenderer {
 	}
 
 	private paintRangeRing(
-		src: { cx: number; cy: number; range: number; air: boolean } | null,
-		p2: boolean
+		src: { cx: number; cy: number; range: number; air: boolean } | null
 	) {
 		if (!src || src.range <= 0) return;
 		const { ctx } = this;
 		ctx.beginPath();
 		ctx.arc(src.cx, src.cy, src.range, 0, Math.PI * 2);
-		if (p2) {
-			ctx.fillStyle = src.air ? 'rgba(127, 200, 184, 0.16)' : 'rgba(169, 140, 240, 0.16)';
-			ctx.strokeStyle = 'rgba(169, 140, 240, 0.75)';
-		} else {
-			ctx.fillStyle = src.air ? this.cols.rangeAir : this.cols.range;
-			ctx.strokeStyle = src.air ? 'rgba(127, 200, 184, 0.7)' : 'rgba(240, 169, 76, 0.78)';
-		}
 		ctx.fill();
 		ctx.setLineDash([0.18, 0.12]);
 		ctx.lineWidth = 0.045;
@@ -573,19 +543,19 @@ export class BattlefieldRenderer {
 		ctx.setLineDash([]);
 	}
 
-	private drawTowers(towers: TowerView[], selectedId: number | null, selected2Id: number | null) {
+	private drawTowers(towers: TowerView[], selectedId: number | null) {
 		for (const t of towers) {
-			this.drawTower(t, t.id === selectedId, t.id === selected2Id && t.id !== selectedId);
+			this.drawTower(t, t.id === selectedId);
 		}
 	}
 
-	private drawTower(t: TowerView, selected: boolean, selected2: boolean) {
+	private drawTower(t: TowerView, selected: boolean) {
 		const { ctx } = this;
 		const x = t.x + 0.5;
 		const y = t.y + 0.5;
 		ctx.save();
 		ctx.translate(x, y);
-		if (selected || selected2) {
+		if (selected) {
 			ctx.beginPath();
 			ctx.arc(0, 0, 0.52, 0, Math.PI * 2);
 			ctx.strokeStyle = selected ? 'rgba(255, 196, 110, 0.9)' : 'rgba(169, 140, 240, 0.9)';

@@ -515,46 +515,10 @@ h1::after {
 	text-shadow: 0 1px 6px #000;
 }
 
-.map-legend {
-	position: absolute;
-	top: 0.65rem;
-	left: 0.7rem;
-	z-index: 2;
-	display: flex;
-	gap: 0.75rem;
-	margin: 0;
-	padding: 0.28rem 0.5rem;
-	list-style: none;
-	background: rgba(5, 6, 5, 0.72);
-	border: 1px solid rgba(var(--accent-rgb), 0.28);
-	font-family: var(--cond);
-	letter-spacing: 0.12em;
-	text-transform: uppercase;
-	font-size: 0.68rem;
-	color: var(--ink);
-	pointer-events: none;
-}
 
-.map-legend i {
-	display: inline-block;
-	width: 0.55rem;
-	height: 0.55rem;
-	margin-right: 0.28rem;
-	vertical-align: -0.06rem;
-	box-shadow: 0 0 0 1px var(--s-0);
-}
 
-.lg-core {
-	background: #e8c24a;
-}
 
-.lg-spawn {
-	background: #a83024;
-}
 
-.lg-rock {
-	background: #8a8470;
-}
 
 .map-stats {
 	display: flex;
@@ -1525,29 +1489,8 @@ kbd {
 	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
-.inspect.p1-coop {
-	left: 0.8rem;
-	right: auto;
-}
 
-.inspect.p2 {
-	right: 0.8rem;
-	border-color: rgba(192, 132, 224, 0.55);
-	background-image:
-		linear-gradient(var(--pulse), var(--pulse)),
-		linear-gradient(var(--pulse), var(--pulse)),
-		linear-gradient(var(--pulse), var(--pulse)),
-		linear-gradient(var(--pulse), var(--pulse)),
-		linear-gradient(var(--pulse), var(--pulse)),
-		linear-gradient(var(--pulse), var(--pulse)),
-		linear-gradient(var(--pulse), var(--pulse)),
-		linear-gradient(var(--pulse), var(--pulse));
-}
 
-.inspect.p2 h3,
-.inspect.p2 .kicker {
-	color: var(--pulse);
-}
 
 /* The panel floats over the battlefield, so it can cover the very cell you want to
    click. The header is a grab handle; `draggable` clamps it inside the stage. */
@@ -1860,71 +1803,14 @@ kbd {
 	margin-right: 0.4rem;
 }
 
-.map-chip.coop {
-	color: var(--pulse);
-}
 
-.coop-opt {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.4rem;
-	color: var(--muted);
-	font-size: 0.9rem;
-	cursor: pointer;
-	user-select: none;
-	font-family: var(--cond);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-}
 
-.coop-tray {
-	flex: 1 0 100%;
-	display: flex;
-	gap: 0.25rem;
-	flex-wrap: wrap;
-	align-items: stretch;
-	padding-bottom: 0.35rem;
-	border-bottom: 1px solid rgba(var(--accent-rgb), 0.35);
-	margin-bottom: 0.1rem;
-}
 
-.coop-tray .build {
-	width: auto;
-	min-width: 4.6rem;
-	min-height: 3.4rem;
-	padding: 0.28rem 0.4rem;
-	font-size: 0.75rem;
-	border-color: rgba(var(--accent-rgb), 0.35);
-}
 
-.coop-tray .build.active {
-	border-color: var(--pulse);
-	color: var(--pulse);
-}
 
-.coop-tray .shop-glyph {
-	display: none;
-}
 
-	.coop-tray .shop-pic {
-	width: 1.85rem;
-	height: 1.85rem;
-	margin: 0.05rem 0;
-}
 
-.coop-tray .build small,
-.coop-tray .shop-meta {
-	display: none;
-}
 
-.coop-label {
-	font-family: var(--cond);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
-	color: var(--pulse);
-	margin-right: 0.25rem;
-	align-self: center;
-}
 
 .top-actions {
 	display: flex;
@@ -2304,16 +2190,6 @@ a.theater:hover {
 		width: auto;
 		max-height: 38%;
 		overflow: auto;
-	}
-	.inspect.p1-coop {
-		left: 0.45rem;
-		right: auto;
-		width: calc(50% - 0.7rem);
-	}
-	.inspect.p2 {
-		left: auto;
-		right: 0.45rem;
-		width: calc(50% - 0.7rem);
 	}
 }
 

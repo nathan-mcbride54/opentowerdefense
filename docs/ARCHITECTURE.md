@@ -43,7 +43,7 @@ That is the “do not seal the relay / do not pocket a creep” rule.
 
 ## Snapshot
 
-Once per frame the engine serialises a `Snapshot`: HUD numbers, hover validity, selected turret, occupancy, units, projectiles, short-lived FX, **wave intel**, **walk length**, and an **after-action** block. Local co-op adds a second hand (`build2`, `hover2`, `selected2`). The renderer is a pure function of that data plus local canvas caches (static terrain).
+Once per frame the engine serialises a `Snapshot`: HUD numbers, hover validity, selected turret, occupancy, units, projectiles, short-lived FX, **wave intel**, **walk length**, and an **after-action** block. The renderer is a pure function of that data plus local canvas caches (static terrain).
 
 The HUD prefers the same snapshot so the bars cannot disagree with the battlefield.
 
@@ -62,7 +62,6 @@ SvelteKit is static (`adapter-static`, `ssr = false`). Routes:
 - `/` briefing: theater + modifier select, daily assignment, settings
 - `/campaign` ops board: missions (unlock in order) and challenge seeds
 - `/play?map=&mod=` canvas + overlay HUD
-- `/play?coop=1` local co-op (second commander, same sim)
 - `/play?mission=` / `/play?challenge=` campaign and challenge starts
 - `/play?day=` seeded daily (UTC day number)
 - `/play?map=&mod=&seed=` explicit seed (hex or decimal)
@@ -73,7 +72,7 @@ SvelteKit is static (`adapter-static`, `ssr = false`). Routes:
 - `/pack` loadout probe: retune catalog numbers, presets, export JSON
 - `/replay` paste / verify / watch an order log
 
-Hotkeys live in the session layer and are **rebindable** (persisted in `localStorage`). Co-op player 2 uses a fixed second map. The canvas supports drag-paint (when a structure is selected), middle-drag pan, wheel zoom, pinch zoom, and a clickable minimap.
+Hotkeys live in the session layer and are **rebindable** (persisted in `localStorage`). The canvas supports drag-paint (when a structure is selected), middle-drag pan, wheel zoom, and pinch zoom.
 
 Match rules (ground only, bounty, turret cap, starting scrap) live in `otd-core` as a `Modifier`. The HUD reads cap and names from the snapshot. Do not hardcode modifier math in TypeScript.
 
@@ -94,7 +93,7 @@ cargo run -p otd-bench -- --map kilo --pack pack.json --until-wave 8
 
 ## Determinism
 
-`otd-core` uses an explicit xorshift RNG seeded per match. Do not call `rand` or `Math.random` inside the sim. Every order (build, click, upgrade, call wave, …) is logged with a tick and a `player` index (0 or 1). Pause → Copy replay writes `{ mapId, seed, modifierId, orders, pack, outcome, hash }`. The hash ignores `hash` and `outcome` and fingerprints the resolved loadout (including `player` on each order). Replays feed `Game::from_replay` / `otd-bench --orders`. `otd-bench --verify` replays to the claimed tick count and checks hash + outcome.
+`otd-core` uses an explicit xorshift RNG seeded per match. Do not call `rand` or `Math.random` inside the sim. Every order (build, click, upgrade, call wave, …) is logged with a tick. Pause → Copy replay writes `{ mapId, seed, modifierId, orders, pack, outcome, hash }`. The hash ignores `hash` and `outcome` and fingerprints the resolved loadout. Replays feed `Game::from_replay` / `otd-bench --orders`. `otd-bench --verify` replays to the claimed tick count and checks hash + outcome.
 
 ## Adding content
 

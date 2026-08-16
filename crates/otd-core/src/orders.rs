@@ -4,8 +4,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct Order {
     pub tick: u64,
-    #[serde(default)]
-    pub player: u8,
     pub op: OrderOp,
 }
 
@@ -104,7 +102,6 @@ pub fn replay_hash(file: &ReplayFile) -> String {
     h = mix(h, file.orders.len() as u64);
     for o in &file.orders {
         h = mix(h, o.tick);
-        h = mix(h, o.player as u64);
         h = mix(h, op_code(&o.op));
     }
     if let Some(p) = &file.pack {
@@ -223,7 +220,6 @@ mod tests {
             seed: 99,
             orders: vec![Order {
                 tick: 0,
-                player: 0,
                 op: OrderOp::SetBuild { kind: 2 },
             }],
             pack: None,
@@ -235,7 +231,7 @@ mod tests {
         b.seed = 100;
         assert_ne!(replay_hash(&a), replay_hash(&b));
         let mut c = a.clone();
-        c.orders[0].player = 1;
+        c.orders[0].op = OrderOp::SetBuild { kind: 3 };
         assert_ne!(replay_hash(&a), replay_hash(&c));
     }
 }

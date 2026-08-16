@@ -138,7 +138,3 @@ Challenges on the same board are public seeds (Dry Season, Night Watch, Iron Bud
 Pause or defeat → **Copy replay** writes seed, orders, pack, a claimed outcome, and a hash for `otd-bench --verify`. `/replay` pastes that JSON, verifies it, and watches the same ticks on the canvas.
 
 Defeat also prints an after-action: scrap spent, kills and leaks by hull, and which guns scored.
-
-## Local co-op
-
-`/play?coop=1` (briefing and ops board have a checkbox). Two commanders, **one simulation**, **shared scrap and integrity**. Player 1 keeps mouse and the rebindable keymap. Player 2 moves an amber cursor with the arrows, places with Enter, and uses a second keymap (`A S D Z Y` / `H J K L P` for guns, `[ ] \` for strikes, `-` to sell). Pause, speed, mute, and view reset stay on the P1 map. P1 binds win if a key is on both maps. Replays store a `player` field on each order.

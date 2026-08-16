@@ -8,7 +8,7 @@ MIT licensed. Built to be played, forked, and extended.
 
 ## Play (1.0)
 
-Endless matches on ten theaters, an **eight-mission** campaign, known-seed challenges, and **catalog packs**. Barricades and towers **block ground pathing**. Air ignores the maze and steers at the nearest relay. Ten buildables, four upgrade tiers, targeting modes, three strikes, settings (mute, palettes, UI scale, **key rebind**), pan/zoom, a **minimap**, a **map probe**, a **loadout probe**, replay verify hashes, **local co-op** (`/play?coop=1`), a **wave director** with intel, **interest** on leftover scrap, **paint-drag** placement, **relay repair**, **structure move**, **overcharge**, a **Walk** overlay, and a **replay desk** (`/replay`).
+Endless matches on ten theaters, an **eight-mission** campaign, known-seed challenges, and **catalog packs**. Barricades and towers **block ground pathing**. Air ignores the maze and steers at the nearest relay. Ten buildables, four upgrade tiers, targeting modes, three strikes, settings (mute, palettes, UI scale, **key rebind**), pan/zoom, a **map probe**, a **loadout probe**, replay verify hashes, a **wave director** with intel, **interest** on leftover scrap, **paint-drag** placement, **relay repair**, **structure move**, **overcharge**, a **Walk** overlay, and a **replay desk** (`/replay`).
 
 ### Controls
 
@@ -29,7 +29,6 @@ Endless matches on ten theaters, an **eight-mission** campaign, known-seed chall
 | `M` | Mute |
 | `Home` | Reset view |
 | Drag / pinch / wheel | Paint while a structure is selected; middle-drag pans; pinch/wheel zoom |
-| Co-op (`?coop=1`) | P2: arrows + Enter, second keymap (not rebindable) |
 
 ## Stack
 

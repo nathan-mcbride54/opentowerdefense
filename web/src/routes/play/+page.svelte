@@ -6,7 +6,7 @@
 	import CreepPic from '$lib/game/CreepPic.svelte';
 	import SettingsDock from '$lib/game/SettingsDock.svelte';
 	import { draggable } from '$lib/game/draggable';
-	import { formatKey, P2_KEYS, type ActionId } from '$lib/game/keys';
+	import { formatKey, type ActionId } from '$lib/game/keys';
 	import { loadSettings, subscribeSettings } from '$lib/game/settings';
 	import {
 		markCampaignCleared,
@@ -32,7 +32,6 @@
 	let keys = $state(loadSettings().keys);
 	let heldOpen = $state(false);
 	let heldRecorded = false;
-	let coop = $state(false);
 	let watch = $state(false);
 
 	const params = page.url.searchParams;
@@ -48,15 +47,14 @@
 	const challengeId = challengeRaw != null && challengeRaw !== '' ? Number(challengeRaw) : null;
 	const seedHex = seedRaw && seedRaw !== '' ? seedRaw : null;
 	const usePack = params.get('pack') === '1';
-	const coopParam = params.get('coop') === '1';
 	const replayParam = params.get('replay') === '1';
 	const retryHref = (() => {
 		if (replayParam) return '/play?replay=1';
-		const extra = `${usePack ? '&pack=1' : ''}${coopParam ? '&coop=1' : ''}`;
+		const extra = `${usePack ? '&pack=1' : ''}`;
 		if (workshop) return `/play?workshop=1${extra}`;
-		if (missionId != null && !Number.isNaN(missionId)) return `/play?mission=${missionId}${coopParam ? '&coop=1' : ''}`;
+		if (missionId != null && !Number.isNaN(missionId)) return `/play?mission=${missionId}`;
 		if (challengeId != null && !Number.isNaN(challengeId))
-			return `/play?challenge=${challengeId}${coopParam ? '&coop=1' : ''}`;
+			return `/play?challenge=${challengeId}`;
 		if (utcDay != null && !Number.isNaN(utcDay)) return `/play?day=${utcDay}${extra}`;
 		if (seedHex) return `/play?map=${mapId}&mod=${modId}&seed=${encodeURIComponent(seedHex)}${extra}`;
 		return `/play?map=${mapId}&mod=${modId}${extra}`;
@@ -66,17 +64,13 @@
 	const lastMission = $derived(missionCount - 1);
 	const nextMissionHref = $derived(
 		snap?.missionId != null && snap.missionId < lastMission
-			? `/play?mission=${snap.missionId + 1}${coopParam ? '&coop=1' : ''}`
+			? `/play?mission=${snap.missionId + 1}`
 			: '/campaign'
 	);
 	const campaignDone = $derived(snap?.missionId === lastMission && snap.objectiveCleared);
 
 	function bindLabel(id: ActionId) {
 		return formatKey(keys[id]);
-	}
-
-	function p2Bind(id: ActionId) {
-		return formatKey(P2_KEYS[id]);
 	}
 
 	function buildBind(id: number): ActionId {
@@ -154,7 +148,7 @@
 			}
 		}
 		const withPack = (opts: SessionOpts) => {
-			const next = { ...opts, coop: coopParam && !replayParam, replayJson: replayJson ?? undefined };
+			const next = { ...opts, replayJson: replayJson ?? undefined };
 			return packJson && missionId == null && challengeId == null && !replayParam
 				? { ...next, packJson }
 				: next;
@@ -167,7 +161,6 @@
 				strikeItems = extras.strikes;
 				paused = extras.paused;
 				speed = extras.speed;
-				coop = extras.coop;
 				watch = extras.watch;
 				if (!primed) {
 					primed = true;
@@ -268,10 +261,10 @@
 	}
 </script>
 
-{#snippet inspectPanel(sel: SelectedInfo, player: number, extraClass: string, p2: boolean)}
-	<aside class="inspect {extraClass}" use:draggable={{ handle: '.inspect-grip' }}>
+{#snippet inspectPanel(sel: SelectedInfo)}
+	<aside class="inspect" use:draggable={{ handle: '.inspect-grip' }}>
 		<div class="inspect-grip" title="Drag to move this panel">
-			<p class="kicker">{p2 ? 'Commander 2' : 'Selected unit'}</p>
+			<p class="kicker">Selected unit</p>
 			<h3>{sel.name}</h3>
 			<p class="hint">{sel.tierName}</p>
 		</div>
@@ -293,48 +286,48 @@
 			<dt>Invested</dt>
 			<dd>{sel.invested}</dd>
 		</dl>
-		<button type="button" onclick={() => session?.cycleTargeting(player)}>
-			Target {p2 ? p2Bind('target') : bindLabel('target')} · {sel.targetingLabel}
+		<button type="button" onclick={() => session?.cycleTargeting()}>
+			Target {bindLabel('target')} · {sel.targetingLabel}
 		</button>
 		<button
 			type="button"
-			onclick={() => session?.lift(player)}
+			onclick={() => session?.lift()}
 			disabled={(snap?.credits ?? 0) < (snap?.moveCost ?? 0)}
-			class:active={p2 ? snap?.relocating2 : snap?.relocating}
+			class:active={snap?.relocating}
 		>
-			{p2 ? (snap?.relocating2 ? 'Cancel move' : 'Move') : snap?.relocating ? 'Cancel move' : 'Move'}
-			{p2 ? p2Bind('move') : bindLabel('move')} · {`$${snap?.moveCost ?? '—'}`}
+			{snap?.relocating ? 'Cancel move' : 'Move'}
+			{bindLabel('move')} · {`$${snap?.moveCost ?? '—'}`}
 		</button>
 		{#if sel.range > 0}
 			<button
 				type="button"
-				onclick={() => session?.overcharge(player)}
+				onclick={() => session?.overcharge()}
 				disabled={(snap?.credits ?? 0) < (snap?.overchargeCost ?? 0)}
 			>
-				Overcharge {p2 ? p2Bind('overcharge') : bindLabel('overcharge')} · {`$${snap?.overchargeCost ?? '—'}`}
+				Overcharge {bindLabel('overcharge')} · {`$${snap?.overchargeCost ?? '—'}`}
 			</button>
 		{/if}
 		{#if sel.canConvert}
 			<button
 				type="button"
-				onclick={() => session?.convert(player)}
+				onclick={() => session?.convert()}
 				disabled={(sel.convertCost ?? 1) > (snap?.credits ?? 0)}
 			>
-				Air-tune {p2 ? p2Bind('convert') : bindLabel('convert')} · {`$${sel.convertCost}`}
+				Air-tune {bindLabel('convert')} · {`$${sel.convertCost}`}
 			</button>
 		{/if}
 		<button
 			type="button"
-			onclick={() => session?.upgrade(player)}
+			onclick={() => session?.upgrade()}
 			disabled={sel.upgradeCost == null || (sel.upgradeCost ?? 0) > (snap?.credits ?? 0)}
 		>
-			Upgrade {p2 ? p2Bind('upgrade') : bindLabel('upgrade')}
+			Upgrade {bindLabel('upgrade')}
 			{#if sel.upgradeCost != null}
 				· {`$${sel.upgradeCost}`}
 			{/if}
 		</button>
-		<button type="button" onclick={() => session?.sell(player)}>
-			Sell {p2 ? p2Bind('sell') : bindLabel('sell')} · {`$${sel.sellValue}`}
+		<button type="button" onclick={() => session?.sell()}>
+			Sell {bindLabel('sell')} · {`$${sel.sellValue}`}
 		</button>
 	</aside>
 {/snippet}
@@ -358,10 +351,7 @@
 				<div class="toast">{snap.message}</div>
 			{/if}
 			{#if snap?.selected}
-				{@render inspectPanel(snap.selected, 0, coop ? 'p1-coop' : '', false)}
-			{/if}
-			{#if coop && snap?.selected2}
-				{@render inspectPanel(snap.selected2, 1, 'p2', true)}
+				{@render inspectPanel(snap.selected)}
 			{/if}
 			{#if paused && !snap?.defeated && !heldOpen}
 				<div class="defeat pause-overlay">
@@ -446,62 +436,6 @@
 		</div>
 
 		<footer class="tray dock">
-			{#if !watch && coop}
-				<div class="coop-tray">
-					<span class="coop-label">P2 · arrows + Enter</span>
-					<button
-						class="build"
-						class:active={snap?.build2 === 0 && snap?.strike2 === 0}
-						type="button"
-						onclick={() => {
-							session?.setStrike(0, 1);
-							session?.setBuild(0, 1);
-						}}
-					>
-						<span class="shop-head">
-							<span class="shop-key">{p2Bind('cancel')}</span>
-						</span>
-						<ShopPic icon={{ kind: 'inspect' }} />
-						<span class="shop-name">Inspect</span>
-					</button>
-					{#each catalog as item (item.id)}
-						<button
-							class="build"
-							class:active={snap?.build2 === item.id}
-							type="button"
-							onclick={() => session?.setBuild(item.id, 1)}
-							disabled={((snap?.credits ?? 0) < item.cost || (atGunCap && item.range > 0)) &&
-								snap?.build2 !== item.id}
-							title={item.blurb}
-						>
-							<span class="shop-head">
-								<span class="shop-key">{p2Bind(buildBind(item.id))}</span>
-							</span>
-							<ShopPic icon={{ kind: 'build', id: item.id }} />
-							<span class="shop-name">{item.name}</span>
-							<span class="shop-cost">{`$${item.cost}`}</span>
-						</button>
-					{/each}
-					{#each strikeItems as item (item.id)}
-						{@const hud = strikeHud(item.id)}
-						<button
-							class="build strike"
-							class:active={snap?.strike2 === item.id}
-							type="button"
-							onclick={() => session?.setStrike(item.id, 1)}
-							disabled={!(hud?.ready ?? false) && snap?.strike2 !== item.id}
-							title={item.blurb}
-						>
-							<span class="shop-head">
-								<span class="shop-key">{p2Bind(`strike${item.id}` as ActionId)}</span>
-							</span>
-							<ShopPic icon={{ kind: 'strike', id: item.id }} />
-							<span class="shop-name">{item.name}</span>
-							<span class="shop-cost">{`$${item.cost}`}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
 			<div class="dock-body">
 			{#if !watch}
 			<div class="tray-main dock-arsenal">
@@ -662,9 +596,6 @@
 						Wave {snap.wave} · {snap.creepsAlive + snap.creepsRemaining} inbound
 					{:else}
 						Wave {snap?.wave ?? '—'}
-					{/if}
-					{#if coop}
-						· Co-op
 					{/if}
 				</p>
 			</div>

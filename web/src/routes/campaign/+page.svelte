@@ -10,12 +10,10 @@
 	let challenges = $state<ChallengeInfo[]>([]);
 	let docs = $state<Record<number, MapDoc>>({});
 	let cleared = $state<number[]>([]);
-	let coop = $state(false);
 
 	const complete = $derived(missions.length > 0 && missions.every((m) => cleared.includes(m.id)));
 	const held = $derived(missions.filter((m) => cleared.includes(m.id)).length);
 	const pct = $derived(missions.length ? Math.round((held / missions.length) * 100) : 0);
-	const coopQ = $derived(coop ? '&coop=1' : '');
 
 	onMount(async () => {
 		const { default: init, WasmGame } = await import('$lib/wasm/otd');
@@ -43,12 +41,6 @@
 				<p class="hazard"><strong>Board clear.</strong> Run it again, or take a challenge seed.</p>
 			{/if}
 		{/snippet}
-		{#snippet actions()}
-			<label class="coop-opt">
-				<input type="checkbox" bind:checked={coop} />
-				Co-op
-			</label>
-		{/snippet}
 	</MenuChrome>
 	<section class="campaign-board">
 		<div>
@@ -64,7 +56,7 @@
 							<a
 								class="theater"
 								class:cleared={done}
-								href={`/play?mission=${m.id}${coopQ}`}
+								href={`/play?mission=${m.id}`}
 							>
 								{#if docs[m.mapId]}
 									<MapThumb map={docs[m.mapId]} />
@@ -98,7 +90,7 @@
 			<p class="hint">Public seeds. Verify the hash after you walk off the field.</p>
 			<div class="theater-list campaign-grid">
 				{#each challenges as c (c.id)}
-					<a class="theater" href={`/play?challenge=${c.id}${coopQ}`}>
+					<a class="theater" href={`/play?challenge=${c.id}`}>
 						{#if docs[c.mapId]}
 							<MapThumb map={docs[c.mapId]} />
 						{/if}

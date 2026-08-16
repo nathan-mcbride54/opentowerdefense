@@ -21,7 +21,7 @@ The Phase 1 guns are a loadout, not a roster.
 - Helios ground→air convert
 - Pause overlay and best-wave persistence
 
-**Exit test:** two skilled players argue about killbox composition, not about missing tools.
+**Exit test:** a skilled player argues about killbox composition, not about missing tools.
 
 Shipped.
 
@@ -71,9 +71,8 @@ Shipped.
 - Challenge seeds on the ops board
 - Shared replay hash + claimed outcome; `otd-bench --verify` and `WasmGame.verifyReplay`
 - Catalog packs: JSON loadout overlay (`/pack`), presets, replay-hashed
-- Local co-op: two commanders, one Wasm world, shared scrap (`/play?coop=1`)
 
-Catalog packs, hash verification, and local co-op are in. Networked multiplayer is not a Phase 6 promise.
+Catalog packs and hash verification are in. Multiplayer is not a Phase 6 promise.
 
 Shipped.
 
@@ -103,7 +102,7 @@ Shipped.
 
 ## Phase 9 — Field craft
 
-- **Paint**: drag while a structure is selected to place a line of cells. Co-op P2 holds Enter and walks the arrows
+- **Paint**: drag while a structure is selected to place a line of cells
 - **Repair** (`V`): 35 scrap restores 1 relay integrity, not above max, not after a fall
 - **Shade**: ground camo. Guns without Det walk right past it. Pulse / Arc / Helios (and strikes) can see it
 - Seventh campaign mission: **Three Gates** on Tri-Gate
@@ -142,4 +141,4 @@ Shipped.
 - 3D for its own sake
 - Simulation in TypeScript “just for now”
 - Sealing the maze and hoping air does not exist
-- Networked multiplayer (local co-op is enough for now)
+- Multiplayer of any kind; this is a single-player game

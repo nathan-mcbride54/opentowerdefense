@@ -244,10 +244,6 @@ export interface Snapshot {
 	missionName: string | null;
 	seedHex: string;
 	packName: string | null;
-	build2: number;
-	strike2: number;
-	hover2: HoverInfo | null;
-	selected2: SelectedInfo | null;
 	waveIntel: WaveIntel;
 	after: AfterAction;
 	interestPaid: number;
@@ -257,7 +253,6 @@ export interface Snapshot {
 	overchargeCost: number;
 	walk: number;
 	relocating: boolean;
-	relocating2: boolean;
 	walkPaths: [number, number][][];
 }
 

@@ -243,10 +243,6 @@ pub struct Snapshot {
     pub mission_name: Option<String>,
     pub seed_hex: String,
     pub pack_name: Option<String>,
-    pub build2: u8,
-    pub strike2: u8,
-    pub hover2: Option<HoverInfo>,
-    pub selected2: Option<SelectedInfo>,
     pub wave_intel: WaveIntel,
     pub after: AfterAction,
     pub interest_paid: i32,
@@ -258,7 +254,6 @@ pub struct Snapshot {
     pub overcharge_cost: i32,
     pub walk: u32,
     pub relocating: bool,
-    pub relocating2: bool,
     pub walk_paths: Vec<Vec<[i32; 2]>>,
 }
 

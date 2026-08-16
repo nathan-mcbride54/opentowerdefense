@@ -87,36 +87,6 @@ export const DEFAULT_KEYS: Record<ActionId, string> = {
 	viewReset: 'home'
 };
 
-/** Second commander. Avoids the default P1 map. Not rebindable in v1. Skystinger is Z; sell is -. */
-export const P2_KEYS: Record<ActionId, string> = {
-	build1: 'a',
-	build2: 's',
-	build3: 'd',
-	build4: 'z',
-	build5: 'y',
-	build6: 'h',
-	build7: 'j',
-	build8: 'k',
-	build9: 'l',
-	build10: 'p',
-	strike1: '[',
-	strike2: ']',
-	strike3: '\\',
-	upgrade: 'r',
-	sell: '-',
-	target: '.',
-	convert: "'",
-	repair: ';',
-	move: 'o',
-	overcharge: 'i',
-	call: ',',
-	pause: 'space',
-	speed: 'f',
-	mute: 'm',
-	cancel: 'backspace',
-	viewReset: 'home'
-};
-
 export function normalizeKey(ev: KeyboardEvent): string {
 	if (ev.key === ' ') return 'space';
 	return ev.key.length === 1 ? ev.key.toLowerCase() : ev.key.toLowerCase();

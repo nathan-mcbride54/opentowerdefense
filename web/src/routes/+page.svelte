@@ -26,7 +26,6 @@
 	let daily = $state<DailyPick | null>(null);
 	let mapId = $state(0);
 	let modId = $state(0);
-	let coop = $state(false);
 	let bests = $state<Record<string, number>>({});
 	let ready = $state(false);
 	let now = $state(Date.now());
@@ -34,9 +33,9 @@
 	const selectedTheater = $derived(theaters.find((t) => t.id === mapId));
 	const selectedMod = $derived(modifiers.find((m) => m.id === modId));
 	const selectedDoc = $derived(docs[mapId]);
-	const playHref = $derived(`/play?map=${mapId}&mod=${modId}${coop ? '&coop=1' : ''}`);
+	const playHref = $derived(`/play?map=${mapId}&mod=${modId}`);
 	const dailyHref = $derived(
-		daily ? `/play?day=${daily.utcDay}${coop ? '&coop=1' : ''}` : `/play?day=${utcDay()}${coop ? '&coop=1' : ''}`
+		daily ? `/play?day=${daily.utcDay}` : `/play?day=${utcDay()}`
 	);
 	const selectedBest = $derived(bests[`${mapId}-${modId}`] ?? 0);
 	const dailyLeft = $derived.by(() => {
@@ -50,7 +49,7 @@
 	function persist() {
 		if (!ready) return;
 		try {
-			localStorage.setItem(OPS_PICK, JSON.stringify({ mapId, modId, coop }));
+			localStorage.setItem(OPS_PICK, JSON.stringify({ mapId, modId }));
 		} catch {
 			/* ignore */
 		}
@@ -78,7 +77,7 @@
 				selectedTheater &&
 				!(el instanceof Element && el.closest('button, a, summary, [role="button"], details'))
 			) {
-				window.location.href = `/play?map=${mapId}&mod=${modId}${coop ? '&coop=1' : ''}`;
+				window.location.href = `/play?map=${mapId}&mod=${modId}`;
 			}
 		};
 		window.addEventListener('keydown', onKey);
@@ -103,10 +102,9 @@
 			try {
 				const raw = localStorage.getItem(OPS_PICK);
 				if (raw) {
-					const pick = JSON.parse(raw) as { mapId?: number; modId?: number; coop?: boolean };
+					const pick = JSON.parse(raw) as { mapId?: number; modId?: number };
 					if (theaters.some((t) => t.id === pick.mapId)) mapId = pick.mapId as number;
 					if (modifiers.some((m) => m.id === pick.modId)) modId = pick.modId as number;
-					coop = !!pick.coop;
 				}
 			} catch {
 				/* ignore */
@@ -122,7 +120,6 @@
 	$effect(() => {
 		mapId;
 		modId;
-		coop;
 		persist();
 	});
 </script>
@@ -139,11 +136,6 @@
 		{#if selectedDoc && selectedTheater}
 			<div class="map-hero map-stage-hero">
 				<MapThumb map={selectedDoc} large />
-				<ul class="map-legend">
-					<li><i class="lg-core"></i>Relay</li>
-					<li><i class="lg-spawn"></i>Ingress</li>
-					<li><i class="lg-rock"></i>Rock</li>
-				</ul>
 				<div class="map-hero-hud">
 					<div>
 						<p class="kicker">Theater {String(selectedTheater.id + 1).padStart(2, '0')}</p>
@@ -164,10 +156,6 @@
 					</div>
 					<div class="map-hero-actions">
 						<a class="btn primary deploy" href={playHref}>Play</a>
-						<label class="coop-opt">
-							<input type="checkbox" bind:checked={coop} />
-							Co-op
-						</label>
 					</div>
 				</div>
 			</div>
