@@ -1241,6 +1241,16 @@ kbd {
 	opacity: 0.55;
 }
 
+/* .send-now wears the gold plate and its dark --accent-ink label in every state, but the
+   generic `button:not(.primary):not(.build):hover` swaps in a dark surface and outranks
+   the `button:hover` colour. While a wave is running the button is not .primary, so
+   hovering it put near-black ink on a near-black plate and the label vanished. Pin both.
+   Matches that rule's specificity and wins on source order. */
+.dock-cmd button.send-now:hover {
+	background: linear-gradient(180deg, var(--accent-lit) 0%, var(--accent-deep) 100%);
+	color: var(--accent-ink);
+}
+
 .dock-cmd .send-now kbd {
 	background: transparent;
 	border-color: rgba(4, 18, 8, 0.35);
