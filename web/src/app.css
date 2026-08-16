@@ -1158,12 +1158,30 @@ kbd {
 	border-radius: var(--r-2);
 	display: flex;
 	align-items: center;
-	gap: 0.1rem;
+	gap: 0.35rem;
 	min-height: 1.85rem;
-	padding: 0.1rem 0.2rem;
-	background: rgba(5, 6, 5, 0.72);
+	padding: 0.1rem 0.35rem;
+	background: var(--s-0);
 	border: 1px solid rgba(var(--accent-rgb), 0.18);
+	overflow: hidden;
+}
+
+/* The icon track scrolls; the scrollbar is hidden and the trailing fade is the hint,
+   matching the arsenal. The script block beside it never scrolls away. */
+.wave-units {
+	display: flex;
+	align-items: center;
+	gap: 0.1rem;
+	flex: 1 1 auto;
+	min-width: 0;
 	overflow-x: auto;
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+	mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 12px), transparent 100%);
+}
+
+.wave-units::-webkit-scrollbar {
+	display: none;
 }
 
 .wave-preview.empty {
@@ -1196,8 +1214,9 @@ kbd {
 	display: flex;
 	flex-direction: column;
 	gap: 0.08rem;
-	margin-left: 0.35rem;
+	flex: 0 0 auto;
 	min-width: 0;
+	white-space: nowrap;
 }
 
 .wave-script strong {

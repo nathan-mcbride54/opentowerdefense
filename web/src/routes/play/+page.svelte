@@ -636,11 +636,15 @@
 				</div>
 				<div class="wave-preview" class:empty={!snap?.waveIntel?.parts.length}>
 					{#if snap?.waveIntel?.parts.length}
-						{#each waveIcons(snap.waveIntel.parts) as unit (unit.key)}
-							<div class="wave-unit" title={unit.name}>
-								<CreepPic kind={unit.kind} />
-							</div>
-						{/each}
+						<!-- Icons get their own track so a long wave never pushes the script
+						     name out of the strip; the script block stays pinned. -->
+						<div class="wave-units">
+							{#each waveIcons(snap.waveIntel.parts) as unit (unit.key)}
+								<div class="wave-unit" title={unit.name}>
+									<CreepPic kind={unit.kind} />
+								</div>
+							{/each}
+						</div>
 						<div class="wave-script">
 							<strong>{snap.waveIntel.script}</strong>
 							<span>{formatParts(snap.waveIntel.parts)}</span>
