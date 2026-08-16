@@ -151,31 +151,36 @@
 	.settings {
 		position: relative;
 	}
+	/* Anchored from the LEFT by default: every current consumer except the play dock
+	   puts this gear near the left edge, so right-anchoring ran the panel off-screen.
+	   The dock's gear sits at the right edge and re-anchors itself via
+	   `.dock .settings .panel` in app.css. */
 	.panel {
 		position: absolute;
-		right: 0;
+		left: 0;
+		right: auto;
 		top: calc(100% + 0.4rem);
 		z-index: 20;
+		width: max-content;
 		min-width: 18rem;
+		/* Never wider than the viewport, whichever edge it is anchored to. */
+		max-width: calc(100vw - 1.5rem);
 		max-height: min(70vh, 36rem);
 		overflow: auto;
 		padding: 0.75rem 0.85rem;
-		background: linear-gradient(180deg, #141816, #070807);
-		border: 1px solid rgba(77, 184, 212, 0.4);
-		box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+		border-radius: var(--r-3);
+		background: linear-gradient(180deg, var(--s-3), var(--s-0));
+		border: 1px solid var(--line);
+		box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
 		display: flex;
 		flex-direction: column;
 		gap: 0.55rem;
 	}
-	/* Compact is only used by the play dock, whose gear sits at the right edge —
-	   left-anchoring pushed the panel past the viewport, where `.play { overflow: hidden }`
-	   clipped the right column of key binds. */
+
+	/* Compact gears sit at the bottom of their bar, so the panel opens upward. */
 	.compact .panel {
-		right: 0;
-		left: auto;
 		bottom: calc(100% + 0.4rem);
 		top: auto;
-		max-width: calc(100vw - 1.5rem);
 	}
 	.row {
 		display: flex;
