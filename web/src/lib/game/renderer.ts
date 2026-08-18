@@ -449,6 +449,14 @@ export class BattlefieldRenderer {
 		if (build === 0) {
 			return;
 		}
+		// Holding a gun over an existing structure is inspect, not a refused place.
+		// Engine marks that as valid with no walkAfter.
+		if (h.valid && h.walkAfter == null) {
+			ctx.strokeStyle = this.cols.valid;
+			ctx.lineWidth = 0.09;
+			ctx.strokeRect(h.x + 0.04, h.y + 0.04, 0.92, 0.92);
+			return;
+		}
 		ctx.fillStyle = h.valid
 			? 'rgba(180, 200, 70, 0.16)'
 			: 'rgba(220, 70, 60, 0.16)';

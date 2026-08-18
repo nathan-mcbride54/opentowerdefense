@@ -4,8 +4,8 @@
   "description": "Open-source maze tower defense. Shape the path. Keep the lamp lit.",
   "license": "MIT",
   "scripts": {
-    "wasm": "wasm-pack build crates/otd-wasm --dev --target web --out-dir ../../web/src/lib/wasm --out-name otd",
-    "wasm:release": "wasm-pack build crates/otd-wasm --release --target web --out-dir ../../web/src/lib/wasm --out-name otd",
+    "wasm": "wasm-pack build crates/otd-wasm --dev --target web --out-dir ../../web/src/lib/wasm --out-name otd && node tools/patch-wasm-memory.mjs",
+    "wasm:release": "wasm-pack build crates/otd-wasm --release --target web --out-dir ../../web/src/lib/wasm --out-name otd && node tools/patch-wasm-memory.mjs",
     "dev": "npm run wasm && npm --prefix web run dev",
     "dev:fast": "npm run wasm:release && npm --prefix web run dev",
     "build": "npm run wasm:release && npm --prefix web run build",

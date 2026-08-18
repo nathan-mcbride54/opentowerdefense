@@ -207,10 +207,29 @@ export async function createSession(
 
 	const painting = () => !watch && handBuild > 0 && handStrike === 0;
 
+	const occupiedStructure = (x: number, y: number) => {
+		if (!lastSnap) return false;
+		if (lastSnap.towers.some((t) => t.x === x && t.y === y)) return true;
+		return lastSnap.walls.some((w) => w[0] === x && w[1] === y);
+	};
+
+	let paintedCells = new Set<string>();
 	const paintCell = (x: number, y: number) => {
-		if (lastPaint && lastPaint.x === x && lastPaint.y === y) return;
+		const key = `${x},${y}`;
+		if (paintedCells.has(key)) return;
+		// Dragging a line of guns should skip an existing turret, not inspect it and
+		// drop the held structure. A press that *starts* on a turret still inspects.
+		if (paintedCells.size > 0 && occupiedStructure(x, y)) {
+			paintedCells.add(key);
+			lastPaint = { x, y };
+			return;
+		}
 		game.click(x, y);
+		paintedCells.add(key);
 		lastPaint = { x, y };
+		const snap = read();
+		handBuild = snap.build;
+		handStrike = snap.strike;
 	};
 
 	const onPointerDown = (ev: PointerEvent) => {
@@ -220,6 +239,7 @@ export async function createSession(
 		pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, ox: ev.clientX, oy: ev.clientY });
 		panned = false;
 		lastPaint = null;
+		paintedCells = new Set();
 		if (pointers.size === 2) {
 			const pts = [...pointers.values()];
 			pinch0 = {
@@ -296,6 +316,7 @@ export async function createSession(
 		if (pointers.size === 0) {
 			panned = false;
 			lastPaint = null;
+			paintedCells = new Set();
 		}
 		try {
 			canvas.releasePointerCapture(ev.pointerId);
@@ -463,6 +484,7 @@ export async function createSession(
 		pinch0 = null;
 		panned = false;
 		lastPaint = null;
+		paintedCells = new Set();
 	};
 
 	canvas.addEventListener('pointermove', onPointerMove);

@@ -93,7 +93,14 @@ docs/             Architecture, roadmap, gameplay
 
 - [Gameplay](docs/GAMEPLAY.md) — how a match works, roster, economy
 - [Architecture](docs/ARCHITECTURE.md) — engine, snapshot, UI boundaries
-- [Roadmap](docs/ROADMAP.md) — phases 1–11 (1.0)
+- [Roadmap](docs/ROADMAP.md) — phases 1–11 (1.0) and Lantern Dusk
+
+## Known issues
+
+- After the relay falls, the hover still talks like a live match: placement says “Can't build there,” and a strike ring can look valid even though the click does nothing. The defeat overlay is the source of truth.
+- The command dock is tightly packed on mid-width windows (~1100–1545px). Settings / Ops / Briefing can vanish if that layout regresses, because the play view is `overflow: hidden`. Long wave-script names can clip there too.
+- Replays recorded before Lantern Dusk will not `--verify`. The RNG, the hash, and the old co-op `player` field all changed. The JSON still parses.
+- `npm run favicon` is manual. Changing the SVG without regenerating `favicon.ico` (and bumping `?v=` in `web/src/app.html`) leaves the old icon in the tab.
 
 ## Contributing
 

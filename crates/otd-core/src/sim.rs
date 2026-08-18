@@ -544,6 +544,11 @@ impl Game {
             return;
         }
         if self.hand.build.is_structure() {
+            // Clicking an existing wall or gun inspects it. "Can't build there" is for
+            // rock, the relay, and ingress — not for a structure you can already select.
+            if self.inspect_at(x, y) {
+                return;
+            }
             let kind = self.hand.build;
             match self.place_for(x, y, kind) {
                 Ok(()) => {}
@@ -551,11 +556,26 @@ impl Game {
             }
             return;
         }
-        self.hand.selected = match self.grid.occupant(x, y) {
+        self.hand.selected = self.structure_id_at(x, y);
+    }
+
+    fn structure_id_at(&self, x: i32, y: i32) -> Option<u32> {
+        match self.grid.occupant(x, y) {
             Occupant::Tower(id) => Some(id),
             Occupant::Wall => wall_id_at(&self.towers, x, y),
             Occupant::None => None,
+        }
+    }
+
+    fn inspect_at(&mut self, x: i32, y: i32) -> bool {
+        let Some(id) = self.structure_id_at(x, y) else {
+            return false;
         };
+        self.hand.build = BuildKind::Inspect;
+        self.hand.strike = StrikeKind::None;
+        self.hand.lift = None;
+        self.hand.selected = Some(id);
+        true
     }
 
     pub fn place(&mut self, x: i32, y: i32, kind: BuildKind) -> Result<(), PlaceError> {
@@ -2003,6 +2023,37 @@ impl Game {
                 });
             }
         }
+        if hand.build.is_structure() {
+            if let Some(id) = self.structure_id_at(x, y) {
+                if let Some(t) = self.towers.iter().find(|t| t.id == id) {
+                    let mut range = 0.0;
+                    let mut hg = false;
+                    let mut ha = false;
+                    if let Some(s) = self
+                        .loadout
+                        .scaled(t.kind, t.tier)
+                        .or_else(|| self.loadout.gun_even_disabled(t.kind))
+                    {
+                        range = s.range;
+                        hg = s.hits_ground;
+                        ha = s.hits_air;
+                    }
+                    // valid + no walk_after is the inspect cue: the renderer must not
+                    // ghost the held gun on top of the one you are about to select.
+                    return Some(HoverInfo {
+                        x,
+                        y,
+                        valid: true,
+                        reason: String::new(),
+                        range,
+                        hits_ground: hg,
+                        hits_air: ha,
+                        strike: false,
+                        walk_after: None,
+                    });
+                }
+            }
+        }
         let mut range = 0.0;
         let mut hg = false;
         let mut ha = false;
@@ -3275,6 +3326,25 @@ mod tests {
         let start = g.creeps[0].pos;
         g.tick_flickers();
         assert!(g.creeps[0].pos.x > start.x + 0.5);
+    }
+
+    #[test]
+    fn click_existing_turret_inspects_instead_of_refusing() {
+        let mut g = tiny();
+        g.credits = 999;
+        g.place(3, 2, BuildKind::Autocannon).unwrap();
+        let id = g.towers.last().unwrap().id;
+        g.set_build(BuildKind::Howitzer as u8);
+        g.set_hover(3, 2);
+        let hover = g.snapshot().hover.expect("hover");
+        assert!(hover.valid);
+        assert!(hover.reason.is_empty());
+        assert!(hover.walk_after.is_none());
+        assert!(hover.range > 0.0);
+        g.click(3, 2);
+        assert_eq!(g.hand.build, BuildKind::Inspect);
+        assert_eq!(g.hand.selected, Some(id));
+        assert_eq!(g.towers.len(), 1);
     }
 
     #[test]

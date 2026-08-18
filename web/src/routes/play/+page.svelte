@@ -105,12 +105,6 @@
 		const unsub = subscribeSettings(() => {
 			keys = loadSettings().keys;
 		});
-		void (async () => {
-			const { default: init, WasmGame } = await import('$lib/wasm/otd');
-			await init();
-			const list = JSON.parse(WasmGame.campaign()) as unknown[];
-			if (list.length > 0) missionCount = list.length;
-		})();
 		best = readBestWave(mapId, modId);
 		let active: Session | null = null;
 		let dead = false;
@@ -202,6 +196,16 @@
 				}
 				active = s;
 				session = s;
+				// After the match exists. A parallel campaign() during fromMapJson /
+				// mapStatic grew the wasm heap and the next snapshot() faulted — black
+				// field, frozen fortify timer. Built-in theaters often fit in the
+				// initial pages and never showed it.
+				void (async () => {
+					const { default: init, WasmGame } = await import('$lib/wasm/otd');
+					await init();
+					const list = JSON.parse(WasmGame.campaign()) as unknown[];
+					if (list.length > 0) missionCount = list.length;
+				})();
 			})
 			.catch((e: unknown) => {
 				if (dead) return;
