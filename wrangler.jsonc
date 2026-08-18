@@ -1,0 +1,24 @@
+{
+	// Cloudflare Workers (static assets) deployment for opentd.fileark.ca.
+	// The site is fully prerendered by SvelteKit's adapter-static into web/build,
+	// so there is no Worker script — Cloudflare just serves the files.
+	//
+	//   npm run deploy      # builds release wasm + web, then uploads
+	//
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "opentd",
+	"compatibility_date": "2026-08-01",
+	"assets": {
+		"directory": "./web/build",
+		// /play -> play.html, and no redirect games with trailing slashes
+		// (matches trailingSlash = 'never' in web/src/routes/+layout.ts).
+		"html_handling": "auto-trailing-slash",
+		"not_found_handling": "none"
+	},
+	"routes": [
+		{ "pattern": "opentd.fileark.ca", "custom_domain": true }
+	],
+	// Also reachable at opentd.<subdomain>.workers.dev; disable so the only
+	// public entry point is the custom domain.
+	"workers_dev": false
+}

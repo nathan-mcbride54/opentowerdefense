@@ -67,6 +67,18 @@ cargo run -p otd-bench -- --verify path/to/replay.json
 cargo run -p otd-bench -- --validate-pack path/to/pack.json
 ```
 
+## Deploy
+
+The site is fully static (SvelteKit `adapter-static` + Wasm), hosted on Cloudflare Workers static assets and served at **https://opentd.fileark.ca**. Config lives in [`wrangler.jsonc`](wrangler.jsonc); `web/static/_headers` sets long-lived caching for hashed assets.
+
+```bash
+npm install                     # once: pulls in wrangler
+npx wrangler login              # once: authorise the Cloudflare account that owns fileark.ca
+npm run deploy                  # release Wasm + web build + upload
+```
+
+`npm run deploy:dry` runs the same build and validates the upload without publishing. If the link-preview card changes, regenerate it with `npm --prefix web run og` (edit `web/scripts/og.html`, needs a local Chrome/Edge).
+
 ## Repository layout
 
 ```

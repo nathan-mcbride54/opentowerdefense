@@ -12,6 +12,11 @@
     "preview": "npm --prefix web run preview",
     "check": "npm run wasm && npm --prefix web run check",
     "test": "cargo test --workspace",
-    "bench": "cargo run -p otd-bench --"
+    "bench": "cargo run -p otd-bench --",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:dry": "npm run build && wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "^4.124.0"
   }
 }

@@ -17,3 +17,7 @@ web/src/lib/wasm/**
 
 # Local Claude Code launch config — not part of the game.
 .claude/
+
+# Cloudflare deploy tooling
+node_modules/
+.wrangler/
