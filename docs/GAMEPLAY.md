@@ -112,7 +112,7 @@ A seeded **daily assignment** picks a theater and a modifier from the UTC date. 
 
 ## Director
 
-Waves are named. The HUD shows the next script during fortify.
+Waves are named. The HUD shows the next script during fortify. Hulls thicken 13% a wave through 20, then 9% — a finished maze has a DPS cap, and the old curve outran it.
 
 | Script | What it is |
 | --- | --- |

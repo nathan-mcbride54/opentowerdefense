@@ -689,8 +689,21 @@ pub fn creep_stats(kind: CreepKind) -> CreepStats {
     }
 }
 
+/// Hull HP per wave. 13% through wave 20, then 9%.
+///
+/// A finished maze has a hard DPS cap: every buildable tile is already a gun.
+/// Compounding 13% forever made wave 50 a ~400× sponge. The late rate is still
+/// exponential, just slow enough that a packed killbox can hold the walk.
 pub fn wave_hp_mul(wave: u32) -> f32 {
-    1.13_f32.powi(wave.saturating_sub(1) as i32)
+    let grown = wave.saturating_sub(1);
+    const EARLY_WAVES: u32 = 19;
+    const EARLY: f32 = 1.13;
+    const LATE: f32 = 1.09;
+    if grown <= EARLY_WAVES {
+        EARLY.powi(grown as i32)
+    } else {
+        EARLY.powi(EARLY_WAVES as i32) * LATE.powi((grown - EARLY_WAVES) as i32)
+    }
 }
 
 pub fn wave_bounty_mul(wave: u32) -> f32 {
@@ -728,4 +741,25 @@ pub fn strike_pen(kind: StrikeKind) -> f32 {
 pub fn apply_armor(damage: f32, armor: f32, pen: f32) -> f32 {
     let effective = (armor * (1.0 - pen)).clamp(0.0, 0.85);
     (damage * (1.0 - effective)).max(0.5)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hulls_thicken_then_ease() {
+        assert!((wave_hp_mul(1) - 1.0).abs() < 1e-5);
+        assert!((wave_hp_mul(20) - 1.13_f32.powi(19)).abs() < 1e-4);
+        // Same as the old 13% curve through the campaign / midgame.
+        assert!((wave_hp_mul(10) - 1.13_f32.powi(9)).abs() < 1e-4);
+        let late = wave_hp_mul(50);
+        let old_late = 1.13_f32.powi(49);
+        assert!(late < 160.0, "wave 50 mul {late}");
+        assert!(late > 90.0, "wave 50 mul {late}");
+        assert!(
+            late < old_late * 0.45,
+            "late curve should be well under unbounded 13%"
+        );
+    }
 }
